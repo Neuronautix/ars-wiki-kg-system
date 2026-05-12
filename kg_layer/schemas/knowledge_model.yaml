@@ -1,0 +1,62 @@
+id: https://example.org/ars/kg_layer/knowledge_model
+name: knowledge_model
+description: Minimal pilot schema for ARS-derived structured knowledge objects.
+prefixes:
+  linkml: https://w3id.org/linkml/
+  km: https://example.org/ars/kg/
+default_prefix: km
+default_range: string
+
+enums:
+  ReviewStatus:
+    permissible_values:
+      pending:
+      in_review:
+      accepted:
+      rejected:
+      needs_revision:
+
+slots:
+  id:
+    identifier: true
+    required: true
+  source_document:
+    required: true
+  source_section:
+    required: true
+  supporting_quote_or_span:
+    required: true
+  confidence:
+    range: float
+    required: true
+  extraction_method:
+    required: true
+  review_status:
+    required: true
+    range: ReviewStatus
+  reviewer_notes:
+    required: false
+
+classes:
+  BaseExtractedObject:
+    slots:
+      - id
+      - source_document
+      - source_section
+      - supporting_quote_or_span
+      - confidence
+      - extraction_method
+      - review_status
+      - reviewer_notes
+
+  Paper:
+    is_a: BaseExtractedObject
+
+  Concept:
+    is_a: BaseExtractedObject
+
+  Claim:
+    is_a: BaseExtractedObject
+
+  Evidence:
+    is_a: BaseExtractedObject

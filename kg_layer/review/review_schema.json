@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.org/ars/kg_layer/review_schema.json",
+  "title": "KG Layer Review Decision",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["object_id", "review_status", "reviewer", "reviewed_at", "reviewer_notes"],
+  "properties": {
+    "object_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "review_status": {
+      "type": "string",
+      "enum": ["pending", "in_review", "accepted", "rejected", "needs_revision"]
+    },
+    "reviewer": {
+      "type": "string",
+      "minLength": 1
+    },
+    "reviewed_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "reviewer_notes": {
+      "type": "string"
+    }
+  }
+}
