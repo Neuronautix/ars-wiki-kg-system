@@ -32,7 +32,7 @@ def auto_accept(validated_path: Path, reviewed_path: Path) -> None:
         obj["review_status"] = "accepted"
         obj["reviewer_notes"] = obj.get("reviewer_notes") or "Auto-accepted by pipeline run."
         obj["reviewer"] = AUTO_REVIEWER
-        obj["reviewed_at"] = obj.get("reviewed_at", reviewed_at)
+        obj["reviewed_at"] = reviewed_at
     reviewed_path.parent.mkdir(parents=True, exist_ok=True)
     reviewed_path.write_text(json.dumps(objects, indent=2, ensure_ascii=False), encoding="utf-8")
     print(f"Auto-accepted {len(objects)} validated objects -> {reviewed_path}")
@@ -108,10 +108,10 @@ def main() -> None:
             ]
         )
 
-    statuses = resolve_publish_statuses(args.publish_mode, args.publish_status)
+    publish_statuses = resolve_publish_statuses(args.publish_mode, args.publish_status)
     export_cmd = [sys.executable, str(export_script), "--input", str(reviewed_path), "--output", str(jsonld_path)]
     wiki_cmd = [sys.executable, str(wiki_script), "--input", str(reviewed_path), "--output-dir", str(wiki_dir)]
-    for status in statuses:
+    for status in publish_statuses:
         export_cmd.extend(["--include-status", status])
         wiki_cmd.extend(["--include-status", status])
 
