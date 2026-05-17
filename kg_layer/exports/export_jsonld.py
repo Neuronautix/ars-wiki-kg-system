@@ -32,6 +32,12 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Export accepted reviewed objects to JSON-LD graph.")
     parser.add_argument("--input", required=True, help="Reviewed objects JSON input.")
     parser.add_argument("--output", required=True, help="JSON-LD output path.")
+    parser.add_argument(
+        "--include-status",
+        action="append",
+        default=None,
+        help="Review status to include in export. Repeatable. Defaults to accepted.",
+    )
     args = parser.parse_args()
 
     input_path = Path(args.input)
@@ -41,7 +47,8 @@ def main() -> None:
         raise SystemExit(f"Input file not found: {input_path}")
 
     objects: List[Dict] = json.loads(input_path.read_text(encoding="utf-8"))
-    accepted = [o for o in objects if o.get("review_status") == "accepted"]
+    statuses = set(args.include_status or ["accepted"])
+    accepted = [o for o in objects if o.get("review_status") in statuses]
 
     doc = {
         "@context": CONTEXT,
@@ -51,7 +58,7 @@ def main() -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(json.dumps(doc, indent=2, ensure_ascii=False), encoding="utf-8")
 
-    print(f"Exported {len(accepted)} accepted objects to {output_path}")
+    print(f"Exported {len(accepted)} objects to {output_path} (statuses: {sorted(statuses)})")
 
 
 if __name__ == "__main__":

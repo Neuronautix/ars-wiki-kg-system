@@ -23,21 +23,22 @@ Common fields on extracted objects:
 ## Workflow
 
 1. Put ARS markdown artifacts in `kg_layer/data/raw/`.
-2. Run extraction to produce candidate objects in `kg_layer/data/normalized/`.
-3. Validate candidate objects.
-4. Apply human review decisions.
-5. Export accepted objects as JSON-LD.
-6. Render wiki pages from accepted objects.
+2. Run the orchestrator (`kg_layer/pipeline/run_pipeline.py`) to execute extract → validate → review → export → wiki.
 
-## Suggested run order
+## Suggested run command
 
 ```powershell
-python kg_layer/extraction/extract_candidates.py --input-dir kg_layer/data/raw --output kg_layer/data/normalized/candidates.json
-python kg_layer/validation/validate_candidates.py --input kg_layer/data/normalized/candidates.json --output kg_layer/data/normalized/candidates.validated.json
-python kg_layer/review/apply_review.py --objects kg_layer/data/normalized/candidates.validated.json --reviews kg_layer/review/reviews.json --output kg_layer/data/reviewed/reviewed.json
-python kg_layer/exports/export_jsonld.py --input kg_layer/data/reviewed/reviewed.json --output kg_layer/data/published/graph.jsonld
-python kg_layer/wiki/render_wiki_pages.py --input kg_layer/data/reviewed/reviewed.json --output-dir kg_layer/data/published/wiki
+python kg_layer/pipeline/run_pipeline.py
 ```
+
+## Orchestrator options
+
+- `--input-dir`: where ARS markdown artifacts live (can be outside `kg_layer/data/raw`).
+- `--include-glob` / `--exclude-glob`: extraction file filters.
+- `--publish-mode accepted|draft|all`: publishing status policy.
+- `--publish-status <status>` (repeatable): explicit status list, overrides `--publish-mode`.
+- `--skip-review-apply`: skip review merge and publish validated objects directly.
+- `--auto-accept-validated`: mark all validated objects as accepted before export/wiki.
 
 ## Notes
 

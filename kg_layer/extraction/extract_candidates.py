@@ -1,6 +1,7 @@
 import argparse
 import json
 import re
+from fnmatch import fnmatch
 from pathlib import Path
 from typing import Dict, List, Tuple
 
@@ -136,6 +137,18 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Extract minimal candidate objects from markdown artifacts.")
     parser.add_argument("--input-dir", required=True, help="Directory containing markdown artifacts.")
     parser.add_argument("--output", required=True, help="Output JSON path for extracted candidates.")
+    parser.add_argument(
+        "--include-glob",
+        action="append",
+        default=[],
+        help="Optional relative-path glob filter. Repeatable (e.g., --include-glob '*article*.md').",
+    )
+    parser.add_argument(
+        "--exclude-glob",
+        action="append",
+        default=[],
+        help="Optional relative-path glob exclusion. Repeatable.",
+    )
     args = parser.parse_args()
 
     input_dir = Path(args.input_dir)
@@ -145,6 +158,19 @@ def main() -> None:
         raise SystemExit(f"Input directory not found: {input_dir}")
 
     files = sorted([*input_dir.rglob("*.md"), *input_dir.rglob("*.markdown")])
+
+    def rel_path(path: Path) -> str:
+        return path.relative_to(input_dir).as_posix()
+
+    def matches_any(path: Path, globs: List[str]) -> bool:
+        rel = rel_path(path)
+        return any(fnmatch(rel, g) for g in globs)
+
+    if args.include_glob:
+        files = [p for p in files if matches_any(p, args.include_glob)]
+    if args.exclude_glob:
+        files = [p for p in files if not matches_any(p, args.exclude_glob)]
+
     if not files:
         raise SystemExit("No markdown files found in input directory.")
 

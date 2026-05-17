@@ -54,37 +54,16 @@ kg_layer/data/raw/
 
 ### Step 3 — Run the pipeline
 
-Paste these five commands one at a time into your terminal. Each one builds on the last.
+Use the one-command orchestrator:
 
 ```bash
-# 1. Extract — reads your documents and finds Papers, Concepts, Claims, and Evidence
-python kg_layer/extraction/extract_candidates.py \
-  --input-dir kg_layer/data/raw \
-  --output kg_layer/data/normalized/candidates.json
-
-# 2. Validate — checks that everything extracted looks correct
-python kg_layer/validation/validate_candidates.py \
-  --input  kg_layer/data/normalized/candidates.json \
-  --output kg_layer/data/normalized/candidates.validated.json
-
-# 3. Apply review — stamps objects with the review decisions in reviews.json
-python kg_layer/review/apply_review.py \
-  --objects  kg_layer/data/normalized/candidates.validated.json \
-  --reviews  kg_layer/review/reviews.json \
-  --output   kg_layer/data/reviewed/reviewed.json
-
-# 4. Export — writes the approved knowledge graph as a JSON-LD file
-python kg_layer/exports/export_jsonld.py \
-  --input  kg_layer/data/reviewed/reviewed.json \
-  --output kg_layer/data/published/graph.jsonld
-
-# 5. Render wiki — creates one readable markdown page per approved item
-python kg_layer/wiki/render_wiki_pages.py \
-  --input      kg_layer/data/reviewed/reviewed.json \
-  --output-dir kg_layer/data/published/wiki
+python kg_layer/pipeline/run_pipeline.py
 ```
 
-> **Windows users:** Replace the `\` line-continuation character with `` ` `` (backtick) in PowerShell, or just type each command on a single line.
+By default, this runs extract → validate → apply review → export → wiki using:
+- input: `kg_layer/data/raw`
+- reviews: `kg_layer/review/reviews.json`
+- publish policy: `accepted` only
 
 ### Step 4 — Find your results
 
@@ -121,7 +100,25 @@ After Step 3 above, extracted objects start with `"review_status": "pending"`. T
 
 Valid `review_status` values: `pending` · `in_review` · `accepted` · `rejected` · `needs_revision`
 
-3. Re-run Steps 3–5 to publish the updated graph and wiki.
+3. Re-run Step 3 to publish the updated graph and wiki.
+
+---
+
+## Automatic ARS-to-KG runs
+
+If ARS writes article markdown to another folder, point the orchestrator at that directory:
+
+```bash
+python kg_layer/pipeline/run_pipeline.py \
+  --input-dir /absolute/path/to/ars/articles
+```
+
+Useful options:
+- `--include-glob` / `--exclude-glob`: include or exclude markdown paths during extraction.
+- `--publish-mode accepted|draft|all`: choose what review statuses get exported/rendered.
+- `--publish-status <status>` (repeatable): explicit statuses (overrides `--publish-mode`).
+- `--skip-review-apply`: publish validated objects directly.
+- `--auto-accept-validated`: mark all validated objects as accepted for first-pass auto publishing.
 
 ---
 
