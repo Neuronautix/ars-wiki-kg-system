@@ -1,33 +1,3 @@
-# ARS Wiki KG System
-
-This repository separates project-specific knowledge graph work from upstream ARS.
-
-## Layout
-
-- endor/academic-research-skills: pinned upstream ARS submodule (v3.7.0)
-- kg_layer/: local extraction, validation, review, export, and wiki pipeline
-
-## Quick start
-
-1. Add markdown artifacts to kg_layer/data/raw/.
-2. Run:
-
-`powershell
-python kg_layer/extraction/extract_candidates.py --input-dir kg_layer/data/raw --output kg_layer/data/normalized/candidates.json
-python kg_layer/validation/validate_candidates.py --input kg_layer/data/normalized/candidates.json --output kg_layer/data/normalized/candidates.validated.json
-python kg_layer/review/apply_review.py --objects kg_layer/data/normalized/candidates.validated.json --reviews kg_layer/review/reviews.json --output kg_layer/data/reviewed/reviewed.json
-python kg_layer/exports/export_jsonld.py --input kg_layer/data/reviewed/reviewed.json --output kg_layer/data/published/graph.jsonld
-python kg_layer/wiki/render_wiki_pages.py --input kg_layer/data/reviewed/reviewed.json --output-dir kg_layer/data/published/wiki
-`
-
-## Submodule update flow
-
-`powershell
-git submodule update --init --recursive
-git -C vendor/academic-research-skills fetch --tags
-git -C vendor/academic-research-skills checkout v3.7.0
-`
-"@ | Set-Content -Encoding UTF8 README.md; @"
 __pycache__/
 *.pyc
 kg_layer/data/raw/*
