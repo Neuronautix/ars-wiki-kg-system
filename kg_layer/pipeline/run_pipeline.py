@@ -2,6 +2,7 @@ import argparse
 import json
 import subprocess
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import List
 
@@ -25,11 +26,12 @@ def resolve_publish_statuses(mode: str, explicit_statuses: List[str]) -> List[st
 
 def auto_accept(validated_path: Path, reviewed_path: Path) -> None:
     objects = json.loads(validated_path.read_text(encoding="utf-8"))
+    reviewed_at = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
     for obj in objects:
         obj["review_status"] = "accepted"
         obj["reviewer_notes"] = obj.get("reviewer_notes") or "Auto-accepted by pipeline run."
-        obj["reviewer"] = obj.get("reviewer", "auto_pipeline")
-        obj["reviewed_at"] = obj.get("reviewed_at", "")
+        obj["reviewer"] = obj.get("reviewer", "pipeline_auto")
+        obj["reviewed_at"] = obj.get("reviewed_at", reviewed_at)
     reviewed_path.parent.mkdir(parents=True, exist_ok=True)
     reviewed_path.write_text(json.dumps(objects, indent=2, ensure_ascii=False), encoding="utf-8")
     print(f"Auto-accepted {len(objects)} validated objects -> {reviewed_path}")
