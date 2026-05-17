@@ -16,6 +16,15 @@ enums:
       rejected:
       needs_revision:
 
+  ExtractionMethod:
+    permissible_values:
+      ars_hitl:
+      markdown_heuristic:
+      regex_citation_sentence:
+      sentence_as_evidence_proxy:
+      title_case_phrase_heuristic:
+      file_ingestion:
+
 slots:
   id:
     identifier: true
@@ -36,6 +45,20 @@ slots:
     range: ReviewStatus
   reviewer_notes:
     required: false
+  # Provenance fields populated during review (optional on extraction, required after review).
+  reviewer:
+    required: false
+    description: Identity of the reviewer who approved or updated this item.
+  reviewed_at:
+    required: false
+    description: ISO 8601 timestamp of the review decision.
+  # Article-level metadata propagated from ARS HITL handoff files.
+  article_id:
+    required: false
+    description: Unique identifier for the parent article or ARS run.
+  run_id:
+    required: false
+    description: ARS run identifier for cross-run traceability.
 
 classes:
   BaseExtractedObject:
@@ -48,6 +71,10 @@ classes:
       - extraction_method
       - review_status
       - reviewer_notes
+      - reviewer
+      - reviewed_at
+      - article_id
+      - run_id
 
   Paper:
     is_a: BaseExtractedObject
@@ -60,3 +87,4 @@ classes:
 
   Evidence:
     is_a: BaseExtractedObject
+
