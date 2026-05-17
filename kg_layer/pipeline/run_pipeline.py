@@ -50,12 +50,16 @@ def list_markdown_files(input_dir: Path, include_glob: List[str], exclude_glob: 
     return files
 
 
-def list_structured_files(structured_input_dir: Path) -> List[Path]:
-    """Return all *.kg_candidates.json files in the structured input directory."""
+def validate_structured_input_dir(structured_input_dir: Path) -> None:
     if not structured_input_dir.exists():
         raise SystemExit(f"Structured input directory not found: {structured_input_dir}")
     if not structured_input_dir.is_dir():
         raise SystemExit(f"Structured input path is not a directory: {structured_input_dir}")
+
+
+def list_structured_files(structured_input_dir: Path) -> List[Path]:
+    """Return all *.kg_candidates.json files in the structured input directory."""
+    validate_structured_input_dir(structured_input_dir)
     return sorted(structured_input_dir.glob("*.kg_candidates.json"))
 
 
@@ -367,7 +371,7 @@ def main() -> None:
     if args.merge_structured_and_markdown and not structured_input_dir:
         raise SystemExit("--merge-structured-and-markdown requires --structured-input-dir")
     if structured_input_dir:
-        list_structured_files(structured_input_dir)
+        validate_structured_input_dir(structured_input_dir)
 
     if not args.watch:
         run_once(args)
