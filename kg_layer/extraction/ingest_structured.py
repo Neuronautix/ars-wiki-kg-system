@@ -99,9 +99,7 @@ def ingest_file(path: Path) -> List[Dict]:
             normalized.append(norm)
 
     if all_errors:
-        print(f"Validation issues in {path.name}:")
-        for err in all_errors:
-            print(f"  - {err}")
+        raise ValueError("Validation issues:\n" + "\n".join(f"  - {err}" for err in all_errors))
 
     return normalized
 
@@ -127,6 +125,8 @@ def main() -> None:
 
     if not input_dir.exists():
         raise SystemExit(f"Structured input directory not found: {input_dir}")
+    if not input_dir.is_dir():
+        raise SystemExit(f"Structured input path is not a directory: {input_dir}")
 
     handoff_files = sorted(input_dir.glob("*.kg_candidates.json"))
     if not handoff_files:
@@ -134,6 +134,7 @@ def main() -> None:
 
     all_objs: List[Dict] = []
     seen_ids = set()
+    failures: List[str] = []
 
     for path in handoff_files:
         try:
@@ -149,7 +150,12 @@ def main() -> None:
                 added += 1
             print(f"Ingested {added} items from {path.name}")
         except (ValueError, json.JSONDecodeError) as exc:
-            print(f"Error reading {path.name}: {exc}")
+            message = f"Error reading {path.name}: {exc}"
+            failures.append(message)
+            print(message)
+
+    if failures:
+        raise SystemExit(f"Structured ingest failed for {len(failures)} handoff file(s).")
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(json.dumps(all_objs, indent=2, ensure_ascii=False), encoding="utf-8")

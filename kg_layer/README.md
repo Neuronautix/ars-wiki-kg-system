@@ -55,11 +55,15 @@ This ingests the structured handoff files, validates them, preserves the HITL re
 metadata (reviewer, reviewed_at, review_status), and publishes:
 
 - **Per-article outputs** in `kg_layer/data/published/per_article/`:
-  - `{article_id}.kg.json` — flat KG objects for that article
-  - `{article_id}.graph.jsonld` — JSON-LD graph for that article
+  - `{article-slug}.kg.json` — flat KG objects for that article
+  - `{article-slug}.graph.jsonld` — JSON-LD graph for that article
 - **Global outputs** in `kg_layer/data/published/`:
   - `graph.jsonld` — combined JSON-LD across all articles
   - `wiki/` — human-readable wiki pages
+
+`article-slug` is a filesystem-safe normalization of `article_id` (or the source
+document stem when `article_id` is absent). If two articles normalize to the same
+slug, a short hash suffix is appended to keep filenames distinct.
 
 ### 4. Reuse the graph
 
@@ -80,8 +84,9 @@ or point to any markdown directory:
 python kg_layer/pipeline/run_pipeline.py --input-dir /path/to/markdown
 ```
 
-When `--structured-input-dir` is provided but no `*.kg_candidates.json` files are
-found, the pipeline automatically falls back to markdown extraction.
+When `--structured-input-dir` points to a valid directory but no
+`*.kg_candidates.json` files are found, the pipeline automatically falls back to
+markdown extraction. Missing or non-directory paths fail fast.
 
 ## Merging both sources
 
@@ -131,7 +136,7 @@ Example file: `kg_layer/data/examples/example_article.kg_candidates.json`
 
 - `--input-dir`: markdown input directory (default: `kg_layer/data/raw`).
 - `--structured-input-dir`: directory with `*.kg_candidates.json` ARS HITL handoff files.
-- `--merge-structured-and-markdown`: merge both sources instead of preferring structured.
+- `--merge-structured-and-markdown`: merge both sources instead of preferring structured (requires `--structured-input-dir`).
 - `--include-glob` / `--exclude-glob`: markdown extraction file filters.
 - `--publish-mode accepted|draft|all`: publishing status policy.
 - `--publish-status <status>` (repeatable): explicit status list, overrides `--publish-mode`.
@@ -170,4 +175,3 @@ python kg_layer/review/hitl_review.py decide --reviews kg_layer/review/reviews.j
 - It can evolve into a separate repository later with minimal changes.
 - Structured ARS HITL items that enter as `accepted` flow through the pipeline unchanged —
   their reviewer identity, timestamp, and notes are preserved in every output artifact.
-

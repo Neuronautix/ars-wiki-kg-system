@@ -40,6 +40,7 @@ slots:
     required: true
   extraction_method:
     required: true
+    range: ExtractionMethod
   review_status:
     required: true
     range: ReviewStatus
@@ -87,4 +88,3 @@ classes:
 
   Evidence:
     is_a: BaseExtractedObject
-

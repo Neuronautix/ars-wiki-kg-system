@@ -1,4 +1,5 @@
 import argparse
+import hashlib
 import json
 import re
 from pathlib import Path
@@ -24,6 +25,11 @@ def article_slug(source_document: str, article_id: str = None) -> str:
     val = val.strip().lower()
     val = re.sub(r"[^a-z0-9]+", "-", val)
     return val.strip("-") or "article"
+
+
+def article_slug_suffix(source_document: str, article_id: str = None) -> str:
+    val = f"{article_id or ''}|{source_document}"
+    return hashlib.sha1(val.encode("utf-8")).hexdigest()[:8]
 
 
 def to_jsonld_node(obj: Dict) -> Dict:
@@ -78,12 +84,21 @@ def main() -> None:
 
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    article_entries = []
+    slug_counts: Dict[str, int] = {}
+    for source_document, objs in sorted(by_article.items()):
+        article_id = objs[0].get("article_id") if objs else None
+        base_slug = article_slug(source_document, article_id)
+        slug_counts[base_slug] = slug_counts.get(base_slug, 0) + 1
+        article_entries.append((source_document, objs, article_id, base_slug))
+
     article_count = 0
     total_objects = 0
 
-    for source_document, objs in sorted(by_article.items()):
-        article_id = objs[0].get("article_id") if objs else None
-        slug = article_slug(source_document, article_id)
+    for source_document, objs, article_id, base_slug in article_entries:
+        slug = base_slug
+        if slug_counts[base_slug] > 1:
+            slug = f"{base_slug}-{article_slug_suffix(source_document, article_id)}"
 
         # Per-article KG JSON (flat list of objects).
         kg_path = output_dir / f"{slug}.kg.json"

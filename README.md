@@ -103,14 +103,18 @@ The pipeline:
 
 | Output | Location |
 |---|---|
-| **Per-article KG JSON** | `kg_layer/data/published/per_article/{article}.kg.json` |
-| **Per-article JSON-LD** | `kg_layer/data/published/per_article/{article}.graph.jsonld` |
+| **Per-article KG JSON** | `kg_layer/data/published/per_article/{article-slug}.kg.json` |
+| **Per-article JSON-LD** | `kg_layer/data/published/per_article/{article-slug}.graph.jsonld` |
 | **Global knowledge graph** | `kg_layer/data/published/graph.jsonld` |
 | **Wiki pages** | `kg_layer/data/published/wiki/` |
 | Review queue | `kg_layer/data/review_queue/review_queue.json` |
 | Reviewed objects | `kg_layer/data/reviewed/reviewed.json` |
 
 Open any `.md` file in the wiki folder with a text editor or Markdown viewer to read it.
+
+`article-slug` is a filesystem-safe normalization of `article_id` (or the source
+document stem when `article_id` is absent). If two articles normalize to the same
+slug, a short hash suffix is appended to keep filenames distinct.
 
 ---
 
@@ -201,8 +205,8 @@ python kg_layer/pipeline/run_pipeline.py [options]
 | Option | Description |
 |---|---|
 | `--input-dir DIR` | Markdown input directory (default: `kg_layer/data/raw`). |
-| `--structured-input-dir DIR` | Directory of `*.kg_candidates.json` ARS HITL handoff files. Preferred over markdown when files are found; falls back to markdown otherwise. |
-| `--merge-structured-and-markdown` | Combine structured and markdown candidates instead of preferring one source. |
+| `--structured-input-dir DIR` | Directory of `*.kg_candidates.json` ARS HITL handoff files. Preferred over markdown when files are found; a valid but empty directory falls back to markdown, while missing/non-directory paths fail fast. |
+| `--merge-structured-and-markdown` | Combine structured and markdown candidates instead of preferring one source. Requires `--structured-input-dir`. |
 | `--data-root DIR` | Base output directory (default: `kg_layer/data`). |
 | `--reviews FILE` | Review decisions JSON (default: `kg_layer/review/reviews.json`). |
 | `--include-glob GLOB` | Include filter for markdown files. Repeatable. |

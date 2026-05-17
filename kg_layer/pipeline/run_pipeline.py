@@ -53,7 +53,9 @@ def list_markdown_files(input_dir: Path, include_glob: List[str], exclude_glob: 
 def list_structured_files(structured_input_dir: Path) -> List[Path]:
     """Return all *.kg_candidates.json files in the structured input directory."""
     if not structured_input_dir.exists():
-        return []
+        raise SystemExit(f"Structured input directory not found: {structured_input_dir}")
+    if not structured_input_dir.is_dir():
+        raise SystemExit(f"Structured input path is not a directory: {structured_input_dir}")
     return sorted(structured_input_dir.glob("*.kg_candidates.json"))
 
 
@@ -113,6 +115,9 @@ def run_once(args) -> None:
     structured_input_dir: Path = None
     if args.structured_input_dir:
         structured_input_dir = resolve_repo_path(repo_root, args.structured_input_dir).resolve()
+
+    if args.merge_structured_and_markdown and not structured_input_dir:
+        raise SystemExit("--merge-structured-and-markdown requires --structured-input-dir")
 
     candidates_path = data_root / "normalized" / "candidates.json"
     validated_path = data_root / "normalized" / "candidates.validated.json"
@@ -306,7 +311,7 @@ def main() -> None:
         help=(
             "Directory containing *.kg_candidates.json ARS HITL handoff files. "
             "When present and files exist, structured input is preferred over markdown extraction. "
-            "Falls back to markdown extraction when no handoff files are found."
+            "A valid but empty directory falls back to markdown extraction."
         ),
     )
     add_bool_arg(
@@ -359,6 +364,11 @@ def main() -> None:
     if args.structured_input_dir:
         structured_input_dir = resolve_repo_path(repo_root, args.structured_input_dir).resolve()
 
+    if args.merge_structured_and_markdown and not structured_input_dir:
+        raise SystemExit("--merge-structured-and-markdown requires --structured-input-dir")
+    if structured_input_dir:
+        list_structured_files(structured_input_dir)
+
     if not args.watch:
         run_once(args)
         return
@@ -384,4 +394,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
