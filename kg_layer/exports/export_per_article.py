@@ -1,4 +1,5 @@
 import argparse
+from collections import defaultdict
 import hashlib
 import json
 import re
@@ -28,6 +29,11 @@ def article_slug(source_document: str, article_id: str = None) -> str:
 
 
 def article_slug_suffix(source_document: str, article_id: str = None) -> str:
+    """Return a deterministic collision suffix from article_id and source_document.
+
+    The pipe separator preserves the boundary between the optional article_id and
+    source_document so different value pairs cannot collapse into the same input string.
+    """
     val = f"{article_id or ''}|{source_document}"
     return hashlib.sha256(val.encode("utf-8")).hexdigest()[:16]
 
@@ -85,13 +91,13 @@ def main() -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     article_entries = []
-    slug_counts: Dict[str, int] = {}
+    slug_counts = defaultdict(int)
     for source_document, objs in sorted(by_article.items()):
         if not objs:
             continue
         article_id = objs[0].get("article_id")
         base_slug = article_slug(source_document, article_id)
-        slug_counts[base_slug] = slug_counts.get(base_slug, 0) + 1
+        slug_counts[base_slug] += 1
         article_entries.append((source_document, objs, article_id, base_slug))
 
     article_count = 0

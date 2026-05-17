@@ -99,7 +99,8 @@ def ingest_file(path: Path) -> List[Dict]:
             normalized.append(norm)
 
     if all_errors:
-        raise ValueError(f"{path.name} validation issues:\n" + "\n".join(f"  - {err}" for err in all_errors))
+        error_details = "\n".join(f"  - {err}" for err in all_errors)
+        raise ValueError(f"{path.name} validation issues:\n{error_details}")
 
     return normalized
 
