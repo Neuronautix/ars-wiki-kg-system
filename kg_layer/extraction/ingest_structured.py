@@ -81,7 +81,7 @@ def ingest_file(path: Path) -> List[Dict]:
 
     all_errors: List[str] = []
     normalized: List[Dict] = []
-    seen_ids: set = set()
+    seen_ids = set()
 
     for idx, item in enumerate(items, start=1):
         norm = normalize_item(item, article_metadata)
@@ -133,7 +133,7 @@ def main() -> None:
         raise SystemExit(f"No *.kg_candidates.json files found in: {input_dir}")
 
     all_objs: List[Dict] = []
-    seen_ids: set = set()
+    seen_ids = set()
 
     for path in handoff_files:
         try:

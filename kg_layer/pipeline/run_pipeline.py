@@ -201,7 +201,7 @@ def run_once(args) -> None:
             # Merge: structured first (preferred), then markdown.
             # Deduplicate by id — structured items win on collision.
             merged: List[Dict] = []
-            seen_ids: set = set()
+            seen_ids = set()
             for part in candidate_parts:
                 for obj in json.loads(part.read_text(encoding="utf-8")):
                     obj_id = obj.get("id")
