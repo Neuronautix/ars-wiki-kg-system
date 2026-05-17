@@ -29,7 +29,7 @@ def article_slug(source_document: str, article_id: str = None) -> str:
 
 def article_slug_suffix(source_document: str, article_id: str = None) -> str:
     val = f"{article_id or ''}|{source_document}"
-    return hashlib.sha256(val.encode("utf-8")).hexdigest()[:8]
+    return hashlib.sha256(val.encode("utf-8")).hexdigest()[:12]
 
 
 def to_jsonld_node(obj: Dict) -> Dict:

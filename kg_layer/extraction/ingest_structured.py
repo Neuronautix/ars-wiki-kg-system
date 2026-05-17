@@ -155,7 +155,8 @@ def main() -> None:
             print(message)
 
     if failures:
-        raise SystemExit(f"Structured ingest failed for {len(failures)} handoff file(s).")
+        failed_files = ", ".join(msg.removeprefix("Error reading ").split(":", 1)[0] for msg in failures)
+        raise SystemExit(f"Structured ingest failed for {len(failures)} handoff file(s): {failed_files}")
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(json.dumps(all_objs, indent=2, ensure_ascii=False), encoding="utf-8")
