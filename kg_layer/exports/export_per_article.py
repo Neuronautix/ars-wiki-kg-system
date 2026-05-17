@@ -29,7 +29,7 @@ def article_slug(source_document: str, article_id: str = None) -> str:
 
 def article_slug_suffix(source_document: str, article_id: str = None) -> str:
     val = f"{article_id or ''}|{source_document}"
-    return hashlib.sha1(val.encode("utf-8")).hexdigest()[:8]
+    return hashlib.sha256(val.encode("utf-8")).hexdigest()[:8]
 
 
 def to_jsonld_node(obj: Dict) -> Dict:
@@ -87,7 +87,9 @@ def main() -> None:
     article_entries = []
     slug_counts: Dict[str, int] = {}
     for source_document, objs in sorted(by_article.items()):
-        article_id = objs[0].get("article_id") if objs else None
+        if not objs:
+            continue
+        article_id = objs[0].get("article_id")
         base_slug = article_slug(source_document, article_id)
         slug_counts[base_slug] = slug_counts.get(base_slug, 0) + 1
         article_entries.append((source_document, objs, article_id, base_slug))
