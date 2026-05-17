@@ -11,8 +11,10 @@ CONTEXT = {
     "source_section": "https://schema.org/text",
     "supporting_quote_or_span": "https://schema.org/quotation",
     "confidence": "https://schema.org/confidence",
-    "review_status": "https://schema.org/creativeWorkStatus"
+    "review_status": "https://schema.org/creativeWorkStatus",
 }
+
+PROVENANCE_FIELDS = ("reviewer", "reviewed_at", "article_id", "run_id")
 
 
 def to_jsonld_node(obj: Dict) -> Dict:
@@ -25,8 +27,12 @@ def to_jsonld_node(obj: Dict) -> Dict:
         "confidence": obj.get("confidence"),
         "extraction_method": obj.get("extraction_method"),
         "review_status": obj.get("review_status"),
-        "reviewer_notes": obj.get("reviewer_notes", "")
+        "reviewer_notes": obj.get("reviewer_notes", ""),
     }
+    # Preserve provenance fields when present.
+    for field in PROVENANCE_FIELDS:
+        if obj.get(field):
+            node[field] = obj[field]
     return node
 
 

@@ -50,7 +50,26 @@ def list_markdown_files(input_dir: Path, include_glob: List[str], exclude_glob: 
     return files
 
 
-def build_snapshot(input_dir: Path, include_glob: List[str], exclude_glob: List[str], reviews_path: Path) -> Dict[str, float]:
+def validate_structured_input_dir(structured_input_dir: Path) -> None:
+    if not structured_input_dir.exists():
+        raise SystemExit(f"Structured input directory not found: {structured_input_dir}")
+    if not structured_input_dir.is_dir():
+        raise SystemExit(f"Structured input path is not a directory: {structured_input_dir}")
+
+
+def list_structured_files(structured_input_dir: Path) -> List[Path]:
+    """Return all *.kg_candidates.json files in the structured input directory."""
+    validate_structured_input_dir(structured_input_dir)
+    return sorted(structured_input_dir.glob("*.kg_candidates.json"))
+
+
+def build_snapshot(
+    input_dir: Path,
+    include_glob: List[str],
+    exclude_glob: List[str],
+    reviews_path: Path,
+    structured_input_dir: Path = None,
+) -> Dict[str, float]:
     snapshot: Dict[str, float] = {}
     for path in list_markdown_files(input_dir, include_glob, exclude_glob):
         try:
@@ -59,6 +78,12 @@ def build_snapshot(input_dir: Path, include_glob: List[str], exclude_glob: List[
             continue
     if reviews_path.exists():
         snapshot[str(reviews_path)] = reviews_path.stat().st_mtime
+    if structured_input_dir is not None:
+        for path in list_structured_files(structured_input_dir):
+            try:
+                snapshot[str(path)] = path.stat().st_mtime
+            except FileNotFoundError:
+                continue
     return snapshot
 
 
@@ -91,18 +116,28 @@ def run_once(args) -> None:
     input_dir = resolve_repo_path(repo_root, args.input_dir).resolve()
     reviews_path = resolve_repo_path(repo_root, args.reviews).resolve()
 
+    structured_input_dir: Path = None
+    if args.structured_input_dir:
+        structured_input_dir = resolve_repo_path(repo_root, args.structured_input_dir).resolve()
+
+    if args.merge_structured_and_markdown and not structured_input_dir:
+        raise SystemExit("--merge-structured-and-markdown requires --structured-input-dir")
+
     candidates_path = data_root / "normalized" / "candidates.json"
     validated_path = data_root / "normalized" / "candidates.validated.json"
     reviewed_path = data_root / "reviewed" / "reviewed.json"
     review_queue_path = data_root / "review_queue" / "review_queue.json"
     jsonld_path = data_root / "published" / "graph.jsonld"
     wiki_dir = data_root / "published" / "wiki"
+    per_article_dir = data_root / "published" / "per_article"
 
     extract_script = repo_root / "kg_layer" / "extraction" / "extract_candidates.py"
+    ingest_script = repo_root / "kg_layer" / "extraction" / "ingest_structured.py"
     validate_script = repo_root / "kg_layer" / "validation" / "validate_candidates.py"
     review_script = repo_root / "kg_layer" / "review" / "apply_review.py"
     review_queue_script = repo_root / "kg_layer" / "review" / "build_review_queue.py"
     export_script = repo_root / "kg_layer" / "exports" / "export_jsonld.py"
+    per_article_script = repo_root / "kg_layer" / "exports" / "export_per_article.py"
     wiki_script = repo_root / "kg_layer" / "wiki" / "render_wiki_pages.py"
 
     previous_reviewed_path = reviewed_path.with_suffix(".previous.json")
@@ -112,15 +147,89 @@ def run_once(args) -> None:
         previous_reviewed_path.write_text(reviewed_path.read_text(encoding="utf-8"), encoding="utf-8")
 
     try:
-        extract_cmd = [sys.executable, str(extract_script), "--input-dir", str(input_dir), "--output", str(candidates_path)]
-        for glob_value in args.include_glob:
-            extract_cmd.extend(["--include-glob", glob_value])
-        for glob_value in args.exclude_glob:
-            extract_cmd.extend(["--exclude-glob", glob_value])
-        run_cmd(extract_cmd)
+        # ── Extraction step ──────────────────────────────────────────────────
+        # Determine whether to use structured input, markdown, or both.
+        structured_files = list_structured_files(structured_input_dir) if structured_input_dir else []
+        use_structured = bool(structured_files)
+        use_markdown = (not use_structured) or args.merge_structured_and_markdown
 
+        if structured_input_dir and not use_structured:
+            print(
+                f"No *.kg_candidates.json files found in '{structured_input_dir}'; "
+                "falling back to markdown extraction."
+            )
+
+        if use_structured and use_markdown:
+            print("Merging structured ARS HITL artifacts with markdown extraction.")
+        elif use_structured:
+            print(f"Using structured ARS HITL artifacts from '{structured_input_dir}'.")
+        else:
+            print("Using markdown extraction.")
+
+        # Collect candidates from each active source into temp files, then merge.
+        candidate_parts: List[Path] = []
+
+        if use_structured:
+            structured_candidates = candidates_path.with_name("candidates.structured.json")
+            ingest_cmd = [
+                sys.executable,
+                str(ingest_script),
+                "--input-dir",
+                str(structured_input_dir),
+                "--output",
+                str(structured_candidates),
+            ]
+            run_cmd(ingest_cmd)
+            candidate_parts.append(structured_candidates)
+
+        if use_markdown:
+            markdown_candidates = candidates_path.with_name("candidates.markdown.json")
+            extract_cmd = [
+                sys.executable,
+                str(extract_script),
+                "--input-dir",
+                str(input_dir),
+                "--output",
+                str(markdown_candidates),
+            ]
+            for glob_value in args.include_glob:
+                extract_cmd.extend(["--include-glob", glob_value])
+            for glob_value in args.exclude_glob:
+                extract_cmd.extend(["--exclude-glob", glob_value])
+            run_cmd(extract_cmd)
+            candidate_parts.append(markdown_candidates)
+
+        # Merge partial candidate lists into the main candidates file.
+        if len(candidate_parts) == 1:
+            # No merge needed; rename / copy directly.
+            candidates_path.parent.mkdir(parents=True, exist_ok=True)
+            candidates_path.write_text(
+                candidate_parts[0].read_text(encoding="utf-8"), encoding="utf-8"
+            )
+        else:
+            # Merge: structured first (preferred), then markdown.
+            # Deduplicate by id — structured items win on collision.
+            merged: List[Dict] = []
+            seen_ids = set()
+            for part in candidate_parts:
+                for obj in json.loads(part.read_text(encoding="utf-8")):
+                    obj_id = obj.get("id")
+                    if obj_id not in seen_ids:
+                        seen_ids.add(obj_id)
+                        merged.append(obj)
+            candidates_path.parent.mkdir(parents=True, exist_ok=True)
+            candidates_path.write_text(json.dumps(merged, indent=2, ensure_ascii=False), encoding="utf-8")
+            print(f"Merged {len(merged)} candidates from {len(candidate_parts)} sources.")
+
+        # Clean up temp files.
+        for part in candidate_parts:
+            if part != candidates_path:
+                part.unlink(missing_ok=True)
+
+        # ── Validation ───────────────────────────────────────────────────────
         run_cmd([sys.executable, str(validate_script), "--input", str(candidates_path), "--output", str(validated_path)])
 
+        # ── Review ───────────────────────────────────────────────────────────
         if args.auto_accept_validated:
             auto_accept(validated_path, reviewed_path)
         elif args.skip_review_apply:
@@ -148,10 +257,9 @@ def run_once(args) -> None:
             ]
             if args.carry_forward_accepted and previous_reviewed_path.exists():
                 review_cmd.extend(["--previous-reviewed", str(previous_reviewed_path), "--carry-forward-accepted"])
-            run_cmd(
-                review_cmd
-            )
+            run_cmd(review_cmd)
 
+        # ── Review queue ─────────────────────────────────────────────────────
         queue_cmd = [
             sys.executable,
             str(review_queue_script),
@@ -164,6 +272,7 @@ def run_once(args) -> None:
             queue_cmd.extend(["--previous-reviewed", str(previous_reviewed_path)])
         run_cmd(queue_cmd)
 
+        # ── Global export + wiki ─────────────────────────────────────────────
         publish_statuses = resolve_publish_statuses(args.publish_mode, args.publish_status)
         export_cmd = [sys.executable, str(export_script), "--input", str(reviewed_path), "--output", str(jsonld_path)]
         wiki_cmd = [sys.executable, str(wiki_script), "--input", str(reviewed_path), "--output-dir", str(wiki_dir)]
@@ -173,6 +282,20 @@ def run_once(args) -> None:
 
         run_cmd(export_cmd)
         run_cmd(wiki_cmd)
+
+        # ── Per-article export ───────────────────────────────────────────────
+        per_article_cmd = [
+            sys.executable,
+            str(per_article_script),
+            "--input",
+            str(reviewed_path),
+            "--output-dir",
+            str(per_article_dir),
+        ]
+        for status in publish_statuses:
+            per_article_cmd.extend(["--include-status", status])
+        run_cmd(per_article_cmd)
+
         print("KG pipeline completed.")
     finally:
         if had_previous_reviewed and previous_reviewed_path.exists():
@@ -186,6 +309,24 @@ def main() -> None:
     parser.add_argument("--reviews", default="kg_layer/review/reviews.json", help="Review decisions JSON file.")
     parser.add_argument("--include-glob", action="append", default=[], help="Optional extraction include glob. Repeatable.")
     parser.add_argument("--exclude-glob", action="append", default=[], help="Optional extraction exclude glob. Repeatable.")
+    parser.add_argument(
+        "--structured-input-dir",
+        default=None,
+        help=(
+            "Directory containing *.kg_candidates.json ARS HITL handoff files. "
+            "When present and files exist, structured input is preferred over markdown extraction. "
+            "A valid but empty directory falls back to markdown extraction."
+        ),
+    )
+    add_bool_arg(
+        parser,
+        "--merge-structured-and-markdown",
+        default=False,
+        help_text=(
+            "Merge structured ARS HITL artifacts with markdown extraction instead of preferring one source. "
+            "Requires --structured-input-dir."
+        ),
+    )
     parser.add_argument(
         "--publish-mode",
         choices=["accepted", "draft", "all"],
@@ -223,6 +364,14 @@ def main() -> None:
     repo_root = Path(__file__).resolve().parents[2]
     input_dir = resolve_repo_path(repo_root, args.input_dir).resolve()
     reviews_path = resolve_repo_path(repo_root, args.reviews).resolve()
+    structured_input_dir: Path = None
+    if args.structured_input_dir:
+        structured_input_dir = resolve_repo_path(repo_root, args.structured_input_dir).resolve()
+
+    if args.merge_structured_and_markdown and not structured_input_dir:
+        raise SystemExit("--merge-structured-and-markdown requires --structured-input-dir")
+    if structured_input_dir:
+        validate_structured_input_dir(structured_input_dir)
 
     if not args.watch:
         run_once(args)
@@ -234,7 +383,9 @@ def main() -> None:
     print("Starting live KG sidecar mode (watch). Press Ctrl+C to stop.")
     last_snapshot: Dict[str, float] = {}
     while True:
-        current_snapshot = build_snapshot(input_dir, args.include_glob, args.exclude_glob, reviews_path)
+        current_snapshot = build_snapshot(
+            input_dir, args.include_glob, args.exclude_glob, reviews_path, structured_input_dir
+        )
         if current_snapshot != last_snapshot:
             print("Detected change in ARS artifacts/reviews. Running pipeline...")
             try:

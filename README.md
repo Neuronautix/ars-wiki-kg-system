@@ -1,12 +1,24 @@
 # ARS Wiki Knowledge Graph System
 
-> Turn academic research documents into a structured, browsable knowledge graph — no coding experience required to get started.
+> Each ARS research run produces two synchronized outputs: a polished article for humans and a reusable knowledge graph for machines — no coding experience required to get started.
 
 ---
 
 ## What is this?
 
-The **ARS Wiki KG System** reads your markdown research documents and automatically pulls out key information:
+This system works **alongside the ARS CLI** to automatically turn reviewed research outputs into a structured knowledge graph and browsable wiki.
+
+When ARS finishes a research run you get **two paired deliverables**:
+
+| Output | What it is |
+|---|---|
+| **ARS article** (`article.md`) | The human-readable research synthesis |
+| **Knowledge graph** (`article.kg.json`, `article.graph.jsonld`) | Machine-readable structured knowledge |
+| **Wiki pages** (`wiki/`) | Browsable summaries of key concepts and claims |
+
+The knowledge graph captures the concepts, claims, and evidence from the same reviewed reasoning that produced the article, so it can later be used as structured memory for future research runs.
+
+### What the KG layer extracts
 
 | What it finds | Example |
 |---|---|
@@ -14,8 +26,6 @@ The **ARS Wiki KG System** reads your markdown research documents and automatica
 | **Concepts** | "Machine Learning", "Neural Network" |
 | **Claims** | Any sentence backed by a citation |
 | **Evidence** | The supporting quote for each claim |
-
-It stores everything in a structured format so you (or your team) can review, approve, and publish a searchable knowledge graph and wiki.
 
 ---
 
@@ -31,61 +41,123 @@ That's it. No databases, no cloud accounts, no paid software.
 
 ---
 
-## Quick Start (Step by Step)
+## Recommended: ARS + KG together
+
+The preferred workflow uses structured ARS HITL outputs for the best graph quality.
 
 ### Step 1 — Get the code
-
-Open a terminal (Mac/Linux) or Command Prompt / PowerShell (Windows) and run:
 
 ```bash
 git clone --recurse-submodules https://github.com/Neuronautix/ars-wiki-kg-system.git
 cd ars-wiki-kg-system
 ```
 
-### Step 2 — Add your documents
+### Step 2 — Produce ARS HITL handoff files
 
-Copy your research documents (`.md` or `.markdown` files) into:
+After a research run, export structured KG candidates from the ARS HITL loop into a
+directory as `*.kg_candidates.json` files.
 
+See [`kg_layer/data/examples/example_article.kg_candidates.json`](kg_layer/data/examples/example_article.kg_candidates.json)
+for the exact file format, and [`kg_layer/schemas/ars_handoff_schema.json`](kg_layer/schemas/ars_handoff_schema.json)
+for the full JSON Schema.
+
+Each handoff file covers one article and looks like this (abbreviated):
+
+```json
+{
+  "article_id": "my-article-2026",
+  "title": "My Research Article",
+  "run_id": "ars-run-2026-05-17-001",
+  "source_document": "my_article.md",
+  "items": [
+    {
+      "id": "claim:my-article-2026:1",
+      "type": "Claim",
+      "source_document": "my_article.md",
+      "source_section": "Discussion",
+      "supporting_quote_or_span": "X improves Y by 34% under Z conditions (Smith, 2025).",
+      "confidence": 0.92,
+      "extraction_method": "ars_hitl",
+      "review_status": "accepted",
+      "reviewer": "alice",
+      "reviewed_at": "2026-05-17T10:00:00Z",
+      "reviewer_notes": "Confirmed against source."
+    }
+  ]
+}
 ```
-kg_layer/data/raw/
-```
 
-> **No markdown files yet?** Any plain-text document saved with a `.md` extension works. Even a Word document copy-pasted into a text file and saved as `mypaper.md` is fine to test with.
-
-### Step 3 — Run the pipeline
-
-Use the one-command orchestrator:
+### Step 3 — Run the pipeline with structured input
 
 ```bash
-python kg_layer/pipeline/run_pipeline.py
+python kg_layer/pipeline/run_pipeline.py \
+  --structured-input-dir /path/to/ars/hitl/outputs
 ```
 
-By default, this runs extract → validate → apply review → export → wiki using:
-- input: `kg_layer/data/raw`
-- reviews: `kg_layer/review/reviews.json`
-- publish policy: `accepted` only
+The pipeline:
+- Reads all `*.kg_candidates.json` files from the structured input directory
+- Validates and reviews each item
+- Publishes per-article and global KG outputs
 
 ### Step 4 — Find your results
 
 | Output | Location |
 |---|---|
-| Extracted objects (JSON) | `kg_layer/data/normalized/` |
-| Validated objects (JSON) | `kg_layer/data/normalized/candidates.validated.json` |
-| Reviewed objects (JSON) | `kg_layer/data/reviewed/reviewed.json` |
-| Review queue (JSON) | `kg_layer/data/review_queue/review_queue.json` |
-| Knowledge graph (JSON-LD) | `kg_layer/data/published/graph.jsonld` |
-| Wiki pages (Markdown) | `kg_layer/data/published/wiki/` |
+| **Per-article KG JSON** | `kg_layer/data/published/per_article/{article-slug}.kg.json` |
+| **Per-article JSON-LD** | `kg_layer/data/published/per_article/{article-slug}.graph.jsonld` |
+| **Global knowledge graph** | `kg_layer/data/published/graph.jsonld` |
+| **Wiki pages** | `kg_layer/data/published/wiki/` |
+| Review queue | `kg_layer/data/review_queue/review_queue.json` |
+| Reviewed objects | `kg_layer/data/reviewed/reviewed.json` |
 
-Open any `.md` file in the wiki folder with a text editor or a Markdown viewer to read it.
+Open any `.md` file in the wiki folder with a text editor or Markdown viewer to read it.
+
+`article-slug` is a filesystem-safe normalization of `article_id` (or the source
+document stem when `article_id` is absent). If two articles normalize to the same
+slug, a short hash suffix is appended to keep filenames distinct.
+
+---
+
+## Live sidecar: ARS markdown + automatic KG refresh
+
+If ARS continuously writes or updates markdown files to a folder, run the KG layer
+in **watch mode** alongside it:
+
+```bash
+python kg_layer/pipeline/run_pipeline.py \
+  --input-dir /absolute/path/to/ars/articles \
+  --watch \
+  --poll-seconds 5
+```
+
+The KG layer automatically re-runs whenever ARS adds or updates markdown files.
+You can also combine watch mode with `--structured-input-dir` to pick up both
+structured handoff files and markdown articles as they appear.
+
+---
+
+## Manual mode (markdown only)
+
+If you are not using ARS or just want to try the system with your own files:
+
+1. Copy your `.md` documents into `kg_layer/data/raw/`.
+2. Run:
+
+```bash
+python kg_layer/pipeline/run_pipeline.py
+```
+
+This is the markdown-only fallback and produces the same outputs.
 
 ---
 
 ## How to Review Extracted Items
 
-After Step 3 above, extracted objects start with `"review_status": "pending"`. To approve or reject them:
+After running the pipeline, items start with `"review_status": "pending"` (markdown extraction)
+or carry their ARS HITL status (structured input). To approve or reject pending items:
 
 1. Open `kg_layer/review/reviews.json` in any text editor.
-2. Add an entry for each object you want to update, following this pattern:
+2. Add an entry for each object you want to update:
 
 ```json
 [
@@ -101,9 +173,9 @@ After Step 3 above, extracted objects start with `"review_status": "pending"`. T
 
 Valid `review_status` values: `pending` · `in_review` · `accepted` · `rejected` · `needs_revision`
 
-3. Re-run Step 3 to publish the updated graph and wiki.
+3. Re-run the pipeline to publish the updated graph and wiki.
 
-For prioritized triage, inspect the queue and pick the next highest-impact item:
+For prioritized triage:
 
 ```bash
 python kg_layer/review/hitl_review.py next \
@@ -111,7 +183,7 @@ python kg_layer/review/hitl_review.py next \
   --top 5
 ```
 
-You can also quickly record a decision:
+To record a decision quickly:
 
 ```bash
 python kg_layer/review/hitl_review.py decide \
@@ -124,23 +196,28 @@ python kg_layer/review/hitl_review.py decide \
 
 ---
 
-## Automatic ARS-to-KG runs
-
-If ARS writes article markdown to another folder, point the orchestrator at that directory:
+## All pipeline options
 
 ```bash
-python kg_layer/pipeline/run_pipeline.py \
-  --input-dir /absolute/path/to/ars/articles
+python kg_layer/pipeline/run_pipeline.py [options]
 ```
 
-Useful options:
-- `--include-glob` / `--exclude-glob`: include or exclude markdown paths during extraction.
-- `--publish-mode accepted|draft|all`: choose what review statuses get exported/rendered.
-- `--publish-status <status>` (repeatable): explicit statuses (overrides `--publish-mode`).
-- `--skip-review-apply`: publish validated objects directly (auto-accepts them when using default `--publish-mode accepted`).
-- `--auto-accept-validated`: mark all validated objects as accepted for first-pass auto publishing.
-- `--carry-forward-accepted` / `--no-carry-forward-accepted`: preserve accepted status for unchanged source spans.
-- `--watch --poll-seconds 5`: run as a live sidecar and re-run on ARS/review changes.
+| Option | Description |
+|---|---|
+| `--input-dir DIR` | Markdown input directory (default: `kg_layer/data/raw`). |
+| `--structured-input-dir DIR` | Directory of `*.kg_candidates.json` ARS HITL handoff files. Preferred over markdown when files are found; a valid but empty directory falls back to markdown, while missing/non-directory paths fail fast. |
+| `--merge-structured-and-markdown` | Combine structured and markdown candidates instead of preferring one source. Requires `--structured-input-dir`. |
+| `--data-root DIR` | Base output directory (default: `kg_layer/data`). |
+| `--reviews FILE` | Review decisions JSON (default: `kg_layer/review/reviews.json`). |
+| `--include-glob GLOB` | Include filter for markdown files. Repeatable. |
+| `--exclude-glob GLOB` | Exclude filter for markdown files. Repeatable. |
+| `--publish-mode accepted\|draft\|all` | Status policy for export/wiki. |
+| `--publish-status STATUS` | Explicit status to publish. Repeatable. Overrides `--publish-mode`. |
+| `--skip-review-apply` | Publish validated objects directly (auto-accepts under default mode). |
+| `--auto-accept-validated` | Mark all validated objects as accepted before publishing. |
+| `--carry-forward-accepted` | Preserve accepted status for unchanged source spans (default: on). |
+| `--watch` | Run as a live sidecar and re-run on file changes. |
+| `--poll-seconds N` | Polling interval for `--watch` mode (default: 5). |
 
 ---
 
@@ -150,16 +227,20 @@ Useful options:
 ars-wiki-kg-system/
 ├── kg_layer/                  Main pipeline (everything you interact with)
 │   ├── data/
-│   │   ├── raw/               ← Put your documents here
-│   │   ├── normalized/        Extracted & validated objects
+│   │   ├── raw/               ← Markdown documents (manual / fallback mode)
+│   │   ├── examples/          ← Example ARS HITL handoff file
+│   │   ├── normalized/        Extracted & validated candidates
 │   │   ├── reviewed/          Objects after human review
-│   │   └── published/         Final knowledge graph & wiki pages
-│   ├── extraction/            Script that reads documents
-│   ├── validation/            Script that checks extracted data
-│   ├── review/                Review schema, queue, and decisions file
-│   ├── exports/               Script that writes the JSON-LD graph
-│   ├── wiki/                  Script that renders wiki pages
-│   └── schemas/               Data model definition (LinkML)
+│   │   └── published/
+│   │       ├── graph.jsonld   Global knowledge graph
+│   │       ├── per_article/   ← Per-article KG JSON + JSON-LD (new)
+│   │       └── wiki/          Browsable wiki pages
+│   ├── extraction/            Markdown extractor + structured ingest
+│   ├── validation/            Candidate validation script
+│   ├── review/                Review schema, queue, and decisions
+│   ├── exports/               Global + per-article JSON-LD exporters
+│   ├── wiki/                  Wiki page renderer
+│   └── schemas/               Data model (LinkML + ARS handoff JSON Schema)
 └── vendor/
     └── academic-research-skills/   Upstream ARS reference (pinned submodule)
 ```
@@ -169,21 +250,47 @@ ars-wiki-kg-system/
 ## How the Pipeline Works
 
 ```
-Your .md files
-      │
-      ▼
-  [extract]  ──► candidates.json          (all items, status = pending)
-      │
-      ▼
-  [validate] ──► candidates.validated.json (only well-formed items)
-      │
-      ▼
-  [review]   ──► reviewed.json            (items stamped accepted/rejected/…)
-      │
-      ├──► [export]  ──► graph.jsonld     (accepted items as linked data)
-      │
-      └──► [wiki]    ──► wiki/*.md        (one readable page per accepted item)
+ARS HITL outputs                    Markdown articles
+(*.kg_candidates.json)              (*.md / *.markdown)
+        │                                   │
+        ▼                                   ▼
+  [ingest_structured]           [extract_candidates]
+        │                                   │
+        └──────────── merge ────────────────┘
+                          │
+                          ▼
+                    [validate]  ──► candidates.validated.json
+                          │
+                          ▼
+                    [review]    ──► reviewed.json (provenance + status preserved)
+                          │
+                ┌─────────┼─────────────────┐
+                ▼         ▼                  ▼
+           [export]   [per_article]       [wiki]
+               │       export              │
+               ▼           │              ▼
+          graph.jsonld   {article}.    wiki/*.md
+                         kg.json
+                         {article}.
+                         graph.jsonld
 ```
+
+ARS HITL items that enter as `accepted` flow through unchanged — their reviewer identity,
+timestamp, and notes are preserved in every output artifact.
+
+---
+
+## Using the Graph for Future Insight Generation
+
+The per-article KG files are designed to serve as **structured memory** for future ARS runs.
+Because the graph captures accepted concepts, claims, and evidence with full provenance,
+a future ARS run can use it to:
+
+- **Retrieve prior knowledge** — pull related concepts and accepted claims before generating a new article.
+- **Detect gaps** — compare a new draft against the graph to find missing evidence or uncited concepts.
+- **Generate hypotheses** — query the graph for under-connected concepts or unresolved tensions.
+
+This turns each completed article into a **lasting research asset**, not just a document.
 
 ---
 
