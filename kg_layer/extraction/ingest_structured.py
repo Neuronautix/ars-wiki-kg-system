@@ -1,7 +1,7 @@
 import argparse
 import json
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 REQUIRED_ITEM_FIELDS = [
     "id",
@@ -134,7 +134,7 @@ def main() -> None:
 
     all_objs: List[Dict] = []
     seen_ids = set()
-    failures: List[tuple[str, str]] = []
+    failures: List[Tuple[str, str]] = []
 
     for path in handoff_files:
         try:
