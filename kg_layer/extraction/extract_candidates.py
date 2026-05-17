@@ -1,6 +1,7 @@
 import argparse
 import json
 import re
+from fnmatch import fnmatch
 from pathlib import Path
 from typing import Dict, List, Tuple
 
@@ -48,7 +49,7 @@ def build_object(object_type: str, object_id: str, source_document: str, source_
     }
 
 
-def extract_from_file(path: Path) -> List[Dict]:
+def extract_from_file(path: Path, source_document: str) -> List[Dict]:
     text = path.read_text(encoding="utf-8", errors="ignore")
     objs: List[Dict] = []
 
@@ -57,7 +58,7 @@ def extract_from_file(path: Path) -> List[Dict]:
         build_object(
             "Paper",
             paper_id,
-            str(path),
+            source_document,
             "Document",
             f"Source document {path.name}",
             1.0,
@@ -84,7 +85,7 @@ def extract_from_file(path: Path) -> List[Dict]:
                     build_object(
                         "Claim",
                         claim_id,
-                        str(path),
+                        source_document,
                         section,
                         sentence[:1200],
                         0.7,
@@ -98,7 +99,7 @@ def extract_from_file(path: Path) -> List[Dict]:
                     build_object(
                         "Evidence",
                         ev_id,
-                        str(path),
+                        source_document,
                         section,
                         sentence[:1200],
                         0.65,
@@ -121,7 +122,7 @@ def extract_from_file(path: Path) -> List[Dict]:
                 build_object(
                     "Concept",
                     c_id,
-                    str(path),
+                    source_document,
                     section,
                     concept,
                     0.5,
@@ -136,6 +137,18 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Extract minimal candidate objects from markdown artifacts.")
     parser.add_argument("--input-dir", required=True, help="Directory containing markdown artifacts.")
     parser.add_argument("--output", required=True, help="Output JSON path for extracted candidates.")
+    parser.add_argument(
+        "--include-glob",
+        action="append",
+        default=[],
+        help="Optional relative-path glob filter. Repeatable (e.g., --include-glob '*article*.md').",
+    )
+    parser.add_argument(
+        "--exclude-glob",
+        action="append",
+        default=[],
+        help="Optional relative-path glob exclusion. Repeatable.",
+    )
     args = parser.parse_args()
 
     input_dir = Path(args.input_dir)
@@ -144,13 +157,29 @@ def main() -> None:
     if not input_dir.exists():
         raise SystemExit(f"Input directory not found: {input_dir}")
 
-    files = sorted([*input_dir.rglob("*.md"), *input_dir.rglob("*.markdown")])
-    if not files:
+    all_markdown_files = sorted([*input_dir.rglob("*.md"), *input_dir.rglob("*.markdown")])
+    files = list(all_markdown_files)
+
+    def rel_path(path: Path) -> str:
+        return path.relative_to(input_dir).as_posix()
+
+    def matches_any(path: Path, globs: List[str]) -> bool:
+        rel = rel_path(path)
+        return any(fnmatch(rel, g) for g in globs)
+
+    if args.include_glob:
+        files = [p for p in files if matches_any(p, args.include_glob)]
+    if args.exclude_glob:
+        files = [p for p in files if not matches_any(p, args.exclude_glob)]
+
+    if not all_markdown_files:
         raise SystemExit("No markdown files found in input directory.")
+    if not files:
+        raise SystemExit("No markdown files matched include/exclude filters.")
 
     all_objs: List[Dict] = []
     for file_path in files:
-        all_objs.extend(extract_from_file(file_path))
+        all_objs.extend(extract_from_file(file_path, rel_path(file_path)))
 
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(all_objs, indent=2, ensure_ascii=False), encoding="utf-8")

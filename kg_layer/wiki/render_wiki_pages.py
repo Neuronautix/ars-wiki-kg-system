@@ -4,6 +4,8 @@ import re
 from pathlib import Path
 from typing import Dict, List
 
+ALLOWED_STATUS = {"pending", "in_review", "accepted", "rejected", "needs_revision"}
+
 
 def slugify(value: str) -> str:
     value = value.strip().lower()
@@ -22,6 +24,13 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Render wiki markdown pages from accepted reviewed objects.")
     parser.add_argument("--input", required=True, help="Reviewed objects JSON path.")
     parser.add_argument("--output-dir", required=True, help="Output wiki directory.")
+    parser.add_argument(
+        "--include-status",
+        action="append",
+        default=None,
+        choices=sorted(ALLOWED_STATUS),
+        help="Review status to include in wiki rendering. Repeatable. Defaults to accepted.",
+    )
     args = parser.parse_args()
 
     input_path = Path(args.input)
@@ -31,7 +40,8 @@ def main() -> None:
         raise SystemExit(f"Input file not found: {input_path}")
 
     objs: List[Dict] = json.loads(input_path.read_text(encoding="utf-8"))
-    accepted = [o for o in objs if o.get("review_status") == "accepted"]
+    statuses = set(args.include_status or ["accepted"])
+    accepted = [o for o in objs if o.get("review_status") in statuses]
 
     base_dir = Path(__file__).resolve().parent
     concept_tpl = (base_dir / "templates" / "concept_page.md").read_text(encoding="utf-8")
@@ -55,7 +65,7 @@ def main() -> None:
         (output_dir / fname).write_text(page, encoding="utf-8")
         count += 1
 
-    print(f"Rendered {count} wiki pages to {output_dir}")
+    print(f"Rendered {count} wiki pages to {output_dir} (statuses: {sorted(statuses)})")
 
 
 if __name__ == "__main__":
