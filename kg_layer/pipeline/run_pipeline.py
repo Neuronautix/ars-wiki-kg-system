@@ -27,7 +27,7 @@ def resolve_publish_statuses(mode: str, explicit_statuses: List[str]) -> List[st
 
 def auto_accept(validated_path: Path, reviewed_path: Path) -> None:
     objects = json.loads(validated_path.read_text(encoding="utf-8"))
-    reviewed_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    reviewed_at = datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
     for obj in objects:
         obj["review_status"] = "accepted"
         obj["reviewer_notes"] = obj.get("reviewer_notes") or "Auto-accepted by pipeline run."
@@ -58,8 +58,17 @@ def main() -> None:
         choices=ALL_STATUSES,
         help="Explicit status to publish (repeatable). Overrides --publish-mode.",
     )
-    parser.add_argument("--skip-review-apply", action="store_true", help="Skip apply_review and publish validated objects directly.")
-    parser.add_argument("--auto-accept-validated", action="store_true", help="Set all validated objects to accepted before publishing.")
+    review_mode_group = parser.add_mutually_exclusive_group()
+    review_mode_group.add_argument(
+        "--skip-review-apply",
+        action="store_true",
+        help="Skip apply_review and publish validated objects directly.",
+    )
+    review_mode_group.add_argument(
+        "--auto-accept-validated",
+        action="store_true",
+        help="Set all validated objects to accepted before publishing.",
+    )
     args = parser.parse_args()
 
     repo_root = Path(__file__).resolve().parents[2]
