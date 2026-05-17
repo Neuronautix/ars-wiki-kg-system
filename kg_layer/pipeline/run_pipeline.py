@@ -2,9 +2,11 @@ import argparse
 import json
 import subprocess
 import sys
+import time
 from datetime import datetime, timezone
+from fnmatch import fnmatch
 from pathlib import Path
-from typing import List
+from typing import Dict, List
 
 ALL_STATUSES = ["pending", "in_review", "accepted", "rejected", "needs_revision"]
 DRAFT_STATUSES = ["pending", "in_review", "accepted", "needs_revision"]
@@ -13,6 +15,40 @@ AUTO_REVIEWER = "pipeline_auto"
 
 def run_cmd(args: List[str]) -> None:
     subprocess.run(args, check=True)
+
+
+def resolve_repo_path(repo_root: Path, path_value: str) -> Path:
+    path = Path(path_value)
+    return path if path.is_absolute() else (repo_root / path)
+
+
+def list_markdown_files(input_dir: Path, include_glob: List[str], exclude_glob: List[str]) -> List[Path]:
+    files = sorted([*input_dir.rglob("*.md"), *input_dir.rglob("*.markdown")])
+
+    def rel_path(path: Path) -> str:
+        return path.relative_to(input_dir).as_posix()
+
+    def matches_any(path: Path, globs: List[str]) -> bool:
+        rel = rel_path(path)
+        return any(fnmatch(rel, g) for g in globs)
+
+    if include_glob:
+        files = [p for p in files if matches_any(p, include_glob)]
+    if exclude_glob:
+        files = [p for p in files if not matches_any(p, exclude_glob)]
+    return files
+
+
+def build_snapshot(input_dir: Path, include_glob: List[str], exclude_glob: List[str], reviews_path: Path) -> Dict[str, float]:
+    snapshot: Dict[str, float] = {}
+    for path in list_markdown_files(input_dir, include_glob, exclude_glob):
+        try:
+            snapshot[str(path)] = path.stat().st_mtime
+        except FileNotFoundError:
+            continue
+    if reviews_path.exists():
+        snapshot[str(reviews_path)] = reviews_path.stat().st_mtime
+    return snapshot
 
 
 def resolve_publish_statuses(mode: str, explicit_statuses: List[str]) -> List[str]:
@@ -38,6 +74,92 @@ def auto_accept(validated_path: Path, reviewed_path: Path) -> None:
     print(f"Auto-accepted {len(objects)} validated objects -> {reviewed_path}")
 
 
+def run_once(args) -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    data_root = resolve_repo_path(repo_root, args.data_root).resolve()
+    input_dir = resolve_repo_path(repo_root, args.input_dir).resolve()
+    reviews_path = resolve_repo_path(repo_root, args.reviews).resolve()
+
+    candidates_path = data_root / "normalized" / "candidates.json"
+    validated_path = data_root / "normalized" / "candidates.validated.json"
+    reviewed_path = data_root / "reviewed" / "reviewed.json"
+    review_queue_path = data_root / "review_queue" / "review_queue.json"
+    jsonld_path = data_root / "published" / "graph.jsonld"
+    wiki_dir = data_root / "published" / "wiki"
+
+    extract_script = repo_root / "kg_layer" / "extraction" / "extract_candidates.py"
+    validate_script = repo_root / "kg_layer" / "validation" / "validate_candidates.py"
+    review_script = repo_root / "kg_layer" / "review" / "apply_review.py"
+    review_queue_script = repo_root / "kg_layer" / "review" / "build_review_queue.py"
+    export_script = repo_root / "kg_layer" / "exports" / "export_jsonld.py"
+    wiki_script = repo_root / "kg_layer" / "wiki" / "render_wiki_pages.py"
+
+    previous_reviewed_path = reviewed_path.with_suffix(".previous.json")
+    had_previous_reviewed = reviewed_path.exists()
+    if had_previous_reviewed:
+        previous_reviewed_path.parent.mkdir(parents=True, exist_ok=True)
+        previous_reviewed_path.write_text(reviewed_path.read_text(encoding="utf-8"), encoding="utf-8")
+
+    try:
+        extract_cmd = [sys.executable, str(extract_script), "--input-dir", str(input_dir), "--output", str(candidates_path)]
+        for glob_value in args.include_glob:
+            extract_cmd.extend(["--include-glob", glob_value])
+        for glob_value in args.exclude_glob:
+            extract_cmd.extend(["--exclude-glob", glob_value])
+        run_cmd(extract_cmd)
+
+        run_cmd([sys.executable, str(validate_script), "--input", str(candidates_path), "--output", str(validated_path)])
+
+        if args.auto_accept_validated:
+            auto_accept(validated_path, reviewed_path)
+        elif args.skip_review_apply:
+            reviewed_path.parent.mkdir(parents=True, exist_ok=True)
+            reviewed_path.write_text(validated_path.read_text(encoding="utf-8"), encoding="utf-8")
+            print(f"Skipped review apply; copied validated objects -> {reviewed_path}")
+        else:
+            review_cmd = [
+                sys.executable,
+                str(review_script),
+                "--objects",
+                str(validated_path),
+                "--reviews",
+                str(reviews_path),
+                "--output",
+                str(reviewed_path),
+            ]
+            if args.carry_forward_accepted and previous_reviewed_path.exists():
+                review_cmd.extend(["--previous-reviewed", str(previous_reviewed_path), "--carry-forward-accepted"])
+            run_cmd(
+                review_cmd
+            )
+
+        queue_cmd = [
+            sys.executable,
+            str(review_queue_script),
+            "--objects",
+            str(reviewed_path),
+            "--output",
+            str(review_queue_path),
+        ]
+        if previous_reviewed_path.exists():
+            queue_cmd.extend(["--previous-reviewed", str(previous_reviewed_path)])
+        run_cmd(queue_cmd)
+
+        publish_statuses = resolve_publish_statuses(args.publish_mode, args.publish_status)
+        export_cmd = [sys.executable, str(export_script), "--input", str(reviewed_path), "--output", str(jsonld_path)]
+        wiki_cmd = [sys.executable, str(wiki_script), "--input", str(reviewed_path), "--output-dir", str(wiki_dir)]
+        for status in publish_statuses:
+            export_cmd.extend(["--include-status", status])
+            wiki_cmd.extend(["--include-status", status])
+
+        run_cmd(export_cmd)
+        run_cmd(wiki_cmd)
+        print("KG pipeline completed.")
+    finally:
+        if had_previous_reviewed and previous_reviewed_path.exists():
+            previous_reviewed_path.unlink(missing_ok=True)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run the full KG layer pipeline in one command.")
     parser.add_argument("--input-dir", default="kg_layer/data/raw", help="Input markdown directory.")
@@ -58,6 +180,14 @@ def main() -> None:
         choices=ALL_STATUSES,
         help="Explicit status to publish (repeatable). Overrides --publish-mode.",
     )
+    parser.add_argument(
+        "--carry-forward-accepted",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Carry forward prior accepted decisions when source spans are unchanged.",
+    )
+    parser.add_argument("--watch", action="store_true", help="Run continuously and re-run pipeline on input/review changes.")
+    parser.add_argument("--poll-seconds", type=int, default=5, help="Polling interval in seconds for --watch mode.")
     review_mode_group = parser.add_mutually_exclusive_group()
     review_mode_group.add_argument(
         "--skip-review-apply",
@@ -72,61 +202,28 @@ def main() -> None:
     args = parser.parse_args()
 
     repo_root = Path(__file__).resolve().parents[2]
-    data_root = (repo_root / args.data_root).resolve()
-    input_dir = (repo_root / args.input_dir).resolve()
-    reviews_path = (repo_root / args.reviews).resolve()
+    input_dir = resolve_repo_path(repo_root, args.input_dir).resolve()
+    reviews_path = resolve_repo_path(repo_root, args.reviews).resolve()
 
-    candidates_path = data_root / "normalized" / "candidates.json"
-    validated_path = data_root / "normalized" / "candidates.validated.json"
-    reviewed_path = data_root / "reviewed" / "reviewed.json"
-    jsonld_path = data_root / "published" / "graph.jsonld"
-    wiki_dir = data_root / "published" / "wiki"
+    if not args.watch:
+        run_once(args)
+        return
 
-    extract_script = repo_root / "kg_layer" / "extraction" / "extract_candidates.py"
-    validate_script = repo_root / "kg_layer" / "validation" / "validate_candidates.py"
-    review_script = repo_root / "kg_layer" / "review" / "apply_review.py"
-    export_script = repo_root / "kg_layer" / "exports" / "export_jsonld.py"
-    wiki_script = repo_root / "kg_layer" / "wiki" / "render_wiki_pages.py"
+    if args.poll_seconds < 1:
+        raise SystemExit("--poll-seconds must be >= 1")
 
-    extract_cmd = [sys.executable, str(extract_script), "--input-dir", str(input_dir), "--output", str(candidates_path)]
-    for glob_value in args.include_glob:
-        extract_cmd.extend(["--include-glob", glob_value])
-    for glob_value in args.exclude_glob:
-        extract_cmd.extend(["--exclude-glob", glob_value])
-    run_cmd(extract_cmd)
-
-    run_cmd([sys.executable, str(validate_script), "--input", str(candidates_path), "--output", str(validated_path)])
-
-    if args.auto_accept_validated:
-        auto_accept(validated_path, reviewed_path)
-    elif args.skip_review_apply:
-        reviewed_path.parent.mkdir(parents=True, exist_ok=True)
-        reviewed_path.write_text(validated_path.read_text(encoding="utf-8"), encoding="utf-8")
-        print(f"Skipped review apply; copied validated objects -> {reviewed_path}")
-    else:
-        run_cmd(
-            [
-                sys.executable,
-                str(review_script),
-                "--objects",
-                str(validated_path),
-                "--reviews",
-                str(reviews_path),
-                "--output",
-                str(reviewed_path),
-            ]
-        )
-
-    publish_statuses = resolve_publish_statuses(args.publish_mode, args.publish_status)
-    export_cmd = [sys.executable, str(export_script), "--input", str(reviewed_path), "--output", str(jsonld_path)]
-    wiki_cmd = [sys.executable, str(wiki_script), "--input", str(reviewed_path), "--output-dir", str(wiki_dir)]
-    for status in publish_statuses:
-        export_cmd.extend(["--include-status", status])
-        wiki_cmd.extend(["--include-status", status])
-
-    run_cmd(export_cmd)
-    run_cmd(wiki_cmd)
-    print("KG pipeline completed.")
+    print("Starting live KG sidecar mode (watch). Press Ctrl+C to stop.")
+    last_snapshot: Dict[str, float] = {}
+    while True:
+        current_snapshot = build_snapshot(input_dir, args.include_glob, args.exclude_glob, reviews_path)
+        if current_snapshot != last_snapshot:
+            print("Detected change in ARS artifacts/reviews. Running pipeline...")
+            try:
+                run_once(args)
+                last_snapshot = current_snapshot
+            except subprocess.CalledProcessError as exc:
+                print(f"Pipeline run failed with exit code {exc.returncode}; waiting for next change.")
+        time.sleep(args.poll_seconds)
 
 
 if __name__ == "__main__":

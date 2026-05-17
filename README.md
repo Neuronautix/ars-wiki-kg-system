@@ -72,6 +72,7 @@ By default, this runs extract → validate → apply review → export → wiki 
 | Extracted objects (JSON) | `kg_layer/data/normalized/` |
 | Validated objects (JSON) | `kg_layer/data/normalized/candidates.validated.json` |
 | Reviewed objects (JSON) | `kg_layer/data/reviewed/reviewed.json` |
+| Review queue (JSON) | `kg_layer/data/review_queue/review_queue.json` |
 | Knowledge graph (JSON-LD) | `kg_layer/data/published/graph.jsonld` |
 | Wiki pages (Markdown) | `kg_layer/data/published/wiki/` |
 
@@ -102,6 +103,25 @@ Valid `review_status` values: `pending` · `in_review` · `accepted` · `rejecte
 
 3. Re-run Step 3 to publish the updated graph and wiki.
 
+For prioritized triage, inspect the queue and pick the next highest-impact item:
+
+```bash
+python kg_layer/review/hitl_review.py next \
+  --queue kg_layer/data/review_queue/review_queue.json \
+  --top 5
+```
+
+You can also quickly record a decision:
+
+```bash
+python kg_layer/review/hitl_review.py decide \
+  --reviews kg_layer/review/reviews.json \
+  --object-id claim:mypaper:1 \
+  --status accepted \
+  --reviewer "Your Name" \
+  --notes "Confirmed against source."
+```
+
 ---
 
 ## Automatic ARS-to-KG runs
@@ -119,6 +139,8 @@ Useful options:
 - `--publish-status <status>` (repeatable): explicit statuses (overrides `--publish-mode`).
 - `--skip-review-apply`: publish validated objects directly.
 - `--auto-accept-validated`: mark all validated objects as accepted for first-pass auto publishing.
+- `--carry-forward-accepted` / `--no-carry-forward-accepted`: preserve accepted status for unchanged source spans.
+- `--watch --poll-seconds 5`: run as a live sidecar and re-run on ARS/review changes.
 
 ---
 

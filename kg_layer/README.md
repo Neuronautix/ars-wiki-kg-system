@@ -24,6 +24,7 @@ Common fields on extracted objects:
 
 1. Put ARS markdown artifacts in `kg_layer/data/raw/`.
 2. Run the orchestrator (`kg_layer/pipeline/run_pipeline.py`) to execute extract → validate → review → export → wiki.
+3. Inspect prioritized review queue at `kg_layer/data/review_queue/review_queue.json`.
 
 ## Suggested run command
 
@@ -39,6 +40,22 @@ python kg_layer/pipeline/run_pipeline.py
 - `--publish-status <status>` (repeatable): explicit status list, overrides `--publish-mode`.
 - `--skip-review-apply`: skip review merge and publish validated objects directly.
 - `--auto-accept-validated`: mark all validated objects as accepted before export/wiki.
+- `--carry-forward-accepted` / `--no-carry-forward-accepted`: keep accepted reviews on unchanged spans.
+- `--watch --poll-seconds 5`: continuous sidecar mode for ARS artifact updates.
+
+## HITL helper commands
+
+Show next best review candidates:
+
+```powershell
+python kg_layer/review/hitl_review.py next --queue kg_layer/data/review_queue/review_queue.json --top 5
+```
+
+Record a review decision quickly:
+
+```powershell
+python kg_layer/review/hitl_review.py decide --reviews kg_layer/review/reviews.json --object-id claim:paper1:1 --status accepted --reviewer reviewer_name --notes "Looks good"
+```
 
 ## Notes
 
