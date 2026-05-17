@@ -13,6 +13,17 @@ DRAFT_STATUSES = ["pending", "in_review", "accepted", "needs_revision"]
 AUTO_REVIEWER = "pipeline_auto"
 
 
+def add_bool_arg(parser: argparse.ArgumentParser, name: str, default: bool, help_text: str) -> None:
+    parser.add_argument(name, dest=name.lstrip("-").replace("-", "_"), action="store_true", help=help_text)
+    parser.add_argument(
+        f"--no-{name.lstrip('-')}",
+        dest=name.lstrip("-").replace("-", "_"),
+        action="store_false",
+        help=f"Disable: {help_text}",
+    )
+    parser.set_defaults(**{name.lstrip("-").replace("-", "_"): default})
+
+
 def run_cmd(args: List[str]) -> None:
     subprocess.run(args, check=True)
 
@@ -114,7 +125,15 @@ def run_once(args) -> None:
             auto_accept(validated_path, reviewed_path)
         elif args.skip_review_apply:
             reviewed_path.parent.mkdir(parents=True, exist_ok=True)
-            reviewed_path.write_text(validated_path.read_text(encoding="utf-8"), encoding="utf-8")
+            validated_objects = json.loads(validated_path.read_text(encoding="utf-8"))
+            if args.publish_mode == "accepted" and not args.publish_status:
+                reviewed_at = datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+                for obj in validated_objects:
+                    obj["review_status"] = "accepted"
+                    obj["reviewer_notes"] = obj.get("reviewer_notes") or "Auto-accepted in skip-review mode."
+                    obj["reviewer"] = AUTO_REVIEWER
+                    obj["reviewed_at"] = reviewed_at
+            reviewed_path.write_text(json.dumps(validated_objects, indent=2, ensure_ascii=False), encoding="utf-8")
             print(f"Skipped review apply; copied validated objects -> {reviewed_path}")
         else:
             review_cmd = [
@@ -180,11 +199,11 @@ def main() -> None:
         choices=ALL_STATUSES,
         help="Explicit status to publish (repeatable). Overrides --publish-mode.",
     )
-    parser.add_argument(
+    add_bool_arg(
+        parser,
         "--carry-forward-accepted",
-        action=argparse.BooleanOptionalAction,
         default=True,
-        help="Carry forward prior accepted decisions when source spans are unchanged.",
+        help_text="Carry forward prior accepted decisions when source spans are unchanged.",
     )
     parser.add_argument("--watch", action="store_true", help="Run continuously and re-run pipeline on input/review changes.")
     parser.add_argument("--poll-seconds", type=int, default=5, help="Polling interval in seconds for --watch mode.")
@@ -192,7 +211,7 @@ def main() -> None:
     review_mode_group.add_argument(
         "--skip-review-apply",
         action="store_true",
-        help="Skip apply_review and publish validated objects directly.",
+        help="Skip apply_review and publish validated objects directly (auto-accepts when publish mode is accepted).",
     )
     review_mode_group.add_argument(
         "--auto-accept-validated",

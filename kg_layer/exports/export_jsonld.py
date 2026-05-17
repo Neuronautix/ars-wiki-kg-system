@@ -3,6 +3,8 @@ import json
 from pathlib import Path
 from typing import Dict, List
 
+ALLOWED_STATUS = {"pending", "in_review", "accepted", "rejected", "needs_revision"}
+
 CONTEXT = {
     "@vocab": "https://example.org/ars/kg#",
     "source_document": "https://schema.org/isBasedOn",
@@ -36,6 +38,7 @@ def main() -> None:
         "--include-status",
         action="append",
         default=None,
+        choices=sorted(ALLOWED_STATUS),
         help="Review status to include in export. Repeatable. Defaults to accepted.",
     )
     args = parser.parse_args()

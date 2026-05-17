@@ -4,6 +4,8 @@ import re
 from pathlib import Path
 from typing import Dict, List
 
+ALLOWED_STATUS = {"pending", "in_review", "accepted", "rejected", "needs_revision"}
+
 
 def slugify(value: str) -> str:
     value = value.strip().lower()
@@ -26,6 +28,7 @@ def main() -> None:
         "--include-status",
         action="append",
         default=None,
+        choices=sorted(ALLOWED_STATUS),
         help="Review status to include in wiki rendering. Repeatable. Defaults to accepted.",
     )
     args = parser.parse_args()

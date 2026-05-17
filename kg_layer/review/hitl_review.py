@@ -1,5 +1,7 @@
 import argparse
 import json
+import os
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List
@@ -13,7 +15,15 @@ def load_json(path: Path):
 
 def write_json(path: Path, data) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+    with tempfile.NamedTemporaryFile(
+        mode="w",
+        encoding="utf-8",
+        delete=False,
+        dir=str(path.parent),
+    ) as tmp_file:
+        tmp_file.write(json.dumps(data, indent=2, ensure_ascii=False))
+        tmp_path = Path(tmp_file.name)
+    os.replace(tmp_path, path)
 
 
 def cmd_next(args) -> None:
@@ -24,6 +34,9 @@ def cmd_next(args) -> None:
     if not queue:
         print("No review items in queue.")
         return
+
+    if args.top < 1:
+        raise SystemExit("--top must be >= 1")
 
     top = queue[: args.top]
     for idx, item in enumerate(top, start=1):

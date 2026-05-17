@@ -38,7 +38,7 @@ python kg_layer/pipeline/run_pipeline.py
 - `--include-glob` / `--exclude-glob`: extraction file filters.
 - `--publish-mode accepted|draft|all`: publishing status policy.
 - `--publish-status <status>` (repeatable): explicit status list, overrides `--publish-mode`.
-- `--skip-review-apply`: skip review merge and publish validated objects directly.
+- `--skip-review-apply`: skip review merge and publish validated objects directly (auto-accepted under default `--publish-mode accepted`).
 - `--auto-accept-validated`: mark all validated objects as accepted before export/wiki.
 - `--carry-forward-accepted` / `--no-carry-forward-accepted`: keep accepted reviews on unchanged spans.
 - `--watch --poll-seconds 5`: continuous sidecar mode for ARS artifact updates.

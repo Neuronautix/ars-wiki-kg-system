@@ -137,7 +137,7 @@ Useful options:
 - `--include-glob` / `--exclude-glob`: include or exclude markdown paths during extraction.
 - `--publish-mode accepted|draft|all`: choose what review statuses get exported/rendered.
 - `--publish-status <status>` (repeatable): explicit statuses (overrides `--publish-mode`).
-- `--skip-review-apply`: publish validated objects directly.
+- `--skip-review-apply`: publish validated objects directly (auto-accepts them when using default `--publish-mode accepted`).
 - `--auto-accept-validated`: mark all validated objects as accepted for first-pass auto publishing.
 - `--carry-forward-accepted` / `--no-carry-forward-accepted`: preserve accepted status for unchanged source spans.
 - `--watch --poll-seconds 5`: run as a live sidecar and re-run on ARS/review changes.

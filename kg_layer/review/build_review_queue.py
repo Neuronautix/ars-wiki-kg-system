@@ -1,7 +1,8 @@
 import argparse
+import hashlib
 import json
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Set, Tuple
 
 QUEUE_STATUSES = {"pending", "in_review", "needs_revision"}
 TYPE_WEIGHT = {"Claim": 0.25, "Evidence": 0.2, "Concept": 0.1, "Paper": 0.05}
@@ -12,17 +13,21 @@ def load_json(path: Path):
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def fingerprint(obj: Dict) -> str:
-    parts = [
+def fingerprint_parts(obj: Dict) -> Tuple[str, str, str, str]:
+    return (
         str(obj.get("type", "")).strip(),
         str(obj.get("source_document", "")).strip(),
         str(obj.get("source_section", "")).strip(),
         str(obj.get("supporting_quote_or_span", "")).strip(),
-    ]
-    return "|".join(parts)
+    )
 
 
-def build_previous_fingerprints(previous_reviewed: List[Dict]) -> set:
+def fingerprint(obj: Dict) -> str:
+    digest = hashlib.sha256(json.dumps(fingerprint_parts(obj), ensure_ascii=False).encode("utf-8")).hexdigest()
+    return f"sha256:{digest}"
+
+
+def build_previous_fingerprints(previous_reviewed: List[Dict]) -> Set[str]:
     return {fingerprint(o) for o in previous_reviewed}
 
 
@@ -51,6 +56,8 @@ def main() -> None:
 
     if not objects_path.exists():
         raise SystemExit(f"Input objects file not found: {objects_path}")
+    if args.max_items < 0:
+        raise SystemExit("--max-items must be >= 0")
 
     objects: List[Dict] = load_json(objects_path)
     previous_reviewed: List[Dict] = []

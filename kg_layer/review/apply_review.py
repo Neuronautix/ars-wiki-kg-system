@@ -1,8 +1,9 @@
 import argparse
+import hashlib
 import json
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 AUTO_REVIEWER = "pipeline_carry_forward"
 
@@ -11,14 +12,18 @@ def load_json(path: Path):
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def fingerprint(obj: Dict) -> str:
-    parts = [
+def fingerprint_parts(obj: Dict) -> Tuple[str, str, str, str]:
+    return (
         str(obj.get("type", "")).strip(),
         str(obj.get("source_document", "")).strip(),
         str(obj.get("source_section", "")).strip(),
         str(obj.get("supporting_quote_or_span", "")).strip(),
-    ]
-    return "|".join(parts)
+    )
+
+
+def fingerprint(obj: Dict) -> str:
+    digest = hashlib.sha256(json.dumps(fingerprint_parts(obj), ensure_ascii=False).encode("utf-8")).hexdigest()
+    return f"sha256:{digest}"
 
 
 def main() -> None:
@@ -54,31 +59,48 @@ def main() -> None:
         previous_reviewed = load_json(previous_reviewed_path)
 
     decision_map = {r["object_id"]: r for r in reviews if "object_id" in r}
-    accepted_fingerprints = set()
+    previous_by_id: Dict[str, Dict] = {str(o.get("id")): o for o in previous_reviewed if o.get("id")}
+    accepted_fingerprint_counts: Dict[str, int] = {}
     if args.carry_forward_accepted:
-        accepted_fingerprints = {
-            fingerprint(o)
-            for o in previous_reviewed
-            if o.get("review_status") == "accepted"
-        }
+        for obj in previous_reviewed:
+            if obj.get("review_status") != "accepted":
+                continue
+            fp = fingerprint(obj)
+            accepted_fingerprint_counts[fp] = accepted_fingerprint_counts.get(fp, 0) + 1
     updated = 0
     carried = 0
     reviewed_at = datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
 
     for obj in objects:
         obj_id = obj.get("id")
+        obj_fingerprint = fingerprint(obj)
         if obj_id in decision_map:
             decision = decision_map[obj_id]
-            obj["review_status"] = decision.get("review_status", obj.get("review_status", "pending"))
+            decision_status = decision.get("review_status", obj.get("review_status", "pending"))
+            decision_fingerprint = decision.get("source_fingerprint")
+            previous_obj = previous_by_id.get(str(obj_id))
+            previous_fingerprint_matches = previous_obj is not None and fingerprint(previous_obj) == obj_fingerprint
+            has_stale_accepted_decision = (
+                args.carry_forward_accepted
+                and decision_status == "accepted"
+                and (
+                    (decision_fingerprint and decision_fingerprint != obj_fingerprint)
+                    or (decision_fingerprint is None and previous_obj is not None and not previous_fingerprint_matches)
+                )
+            )
+            if has_stale_accepted_decision:
+                continue
+            obj["review_status"] = decision_status
             obj["reviewer_notes"] = decision.get("reviewer_notes", obj.get("reviewer_notes", ""))
             obj["reviewer"] = decision.get("reviewer", "")
             obj["reviewed_at"] = decision.get("reviewed_at", "")
             updated += 1
-        elif args.carry_forward_accepted and fingerprint(obj) in accepted_fingerprints:
+        elif args.carry_forward_accepted and accepted_fingerprint_counts.get(obj_fingerprint, 0) > 0:
             obj["review_status"] = "accepted"
             obj["reviewer_notes"] = obj.get("reviewer_notes") or "Accepted carry-forward (unchanged source span)."
             obj["reviewer"] = AUTO_REVIEWER
             obj["reviewed_at"] = reviewed_at
+            accepted_fingerprint_counts[obj_fingerprint] -= 1
             carried += 1
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
