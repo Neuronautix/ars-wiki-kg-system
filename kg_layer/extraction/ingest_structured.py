@@ -134,7 +134,7 @@ def main() -> None:
 
     all_objs: List[Dict] = []
     seen_ids = set()
-    failures: List[str] = []
+    failures: List[tuple[str, str]] = []
 
     for path in handoff_files:
         try:
@@ -151,11 +151,11 @@ def main() -> None:
             print(f"Ingested {added} items from {path.name}")
         except (ValueError, json.JSONDecodeError) as exc:
             message = f"Error reading {path.name}: {exc}"
-            failures.append(message)
+            failures.append((path.name, message))
             print(message)
 
     if failures:
-        failed_files = ", ".join(msg.removeprefix("Error reading ").split(":", 1)[0] for msg in failures)
+        failed_files = ", ".join(path_name for path_name, _ in failures)
         raise SystemExit(f"Structured ingest failed for {len(failures)} handoff file(s): {failed_files}")
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
