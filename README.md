@@ -310,3 +310,15 @@ git -C vendor/academic-research-skills checkout v3.7.0
 
 - Read the detailed developer notes in [`kg_layer/README.md`](kg_layer/README.md).
 - Open an [issue](../../issues) on GitHub if something isn't working.
+
+---
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).
+
+## Contributing
+
+Contributions are welcome through pull requests and issues. For significant
+changes, please open an issue first so maintainers can align on scope before
+implementation.
