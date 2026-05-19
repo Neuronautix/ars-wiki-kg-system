@@ -52,8 +52,8 @@ CONTEXT = {
         "@id": "arskg:supports",
         "@type": "@id",
     },
-    "contradictedBy": {
-        "@id": "arskg:contradictedBy",
+    "contradicts": {
+        "@id": "arskg:contradicts",
         "@type": "@id",
     },
     "aboutConcept": {
@@ -209,12 +209,13 @@ def to_jsonld_node(obj: Dict, iri_by_id: Dict[str, str], base_iri: str) -> Dict:
             node["aliases"] = obj["aliases"]
 
     evidence_links = linked_ids(obj.get("related_evidence_ids", []), iri_by_id, base_iri)
-    evidence_links.extend(relation_links(obj, "supports", iri_by_id, base_iri))
+    if obj.get("type") == "Claim":
+        evidence_links.extend(relation_links(obj, "supports", iri_by_id, base_iri))
     dedup_evidence = {}
     for link in evidence_links:
         dedup_evidence[link["@id"]] = link
     evidence_links = list(dedup_evidence.values())
-    if evidence_links:
+    if evidence_links and obj.get("type") == "Claim":
         node["supportedBy"] = evidence_links
 
     concept_links = linked_ids(obj.get("related_concept_ids", []), iri_by_id, base_iri)
@@ -228,7 +229,7 @@ def to_jsonld_node(obj: Dict, iri_by_id: Dict[str, str], base_iri: str) -> Dict:
 
     contradiction_links = relation_links(obj, "contradicts", iri_by_id, base_iri)
     if contradiction_links:
-        node["contradictedBy"] = contradiction_links
+        node["contradicts"] = contradiction_links
 
     supports_links = relation_links(obj, "supports", iri_by_id, base_iri)
     if supports_links and obj.get("type") == "Evidence":

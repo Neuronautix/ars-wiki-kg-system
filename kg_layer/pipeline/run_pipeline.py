@@ -11,7 +11,7 @@ from typing import Dict, List
 try:
     from kg_layer.exports.jsonld_utils import DEFAULT_BASE_IRI
 except ModuleNotFoundError:
-    DEFAULT_BASE_IRI = "https://example.org/ars/kg/"
+    DEFAULT_BASE_IRI = "https://neuronautix.github.io/ars-wiki-kg-system/kg/"
 
 ALL_STATUSES = ["pending", "in_review", "accepted", "rejected", "needs_revision"]
 DRAFT_STATUSES = ["pending", "in_review", "accepted", "needs_revision"]

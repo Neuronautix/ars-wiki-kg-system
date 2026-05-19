@@ -134,10 +134,22 @@ slots:
     required: false
     description: Assertion modality to separate observed facts from inferred or hypothetical statements.
   relation_edges:
-    range: string
+    range: RelationEdge
     multivalued: true
     required: false
-    description: Typed edge descriptors serialized for interoperability when nested relation objects are unavailable.
+    description: Typed relation edge objects linking this node to another KG node with optional edge confidence.
+  relation_target_id:
+    range: string
+    required: true
+    description: Target object identifier for this relation edge.
+  relation_type:
+    range: RelationType
+    required: true
+    description: Relation type between source and target objects.
+  relation_confidence:
+    range: float
+    required: false
+    description: Optional confidence score for this relation edge in [0,1].
   canonical_id:
     required: false
     description: Stable canonical identifier for concept/entity normalization across runs.
@@ -152,6 +164,12 @@ slots:
     description: KG contract version used to produce this object.
 
 classes:
+  RelationEdge:
+    slots:
+      - relation_target_id
+      - relation_type
+      - relation_confidence
+
   BaseExtractedObject:
     slots:
       - id

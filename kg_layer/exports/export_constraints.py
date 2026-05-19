@@ -198,7 +198,9 @@ def main() -> None:
         "node_count": len(nodes),
         "edge_count": len(edges),
         "retrieval_policy": {
-            "default_mode": "accepted_only",
+            "default_mode": (
+                "accepted_only" if statuses == {"accepted"} else "draft"
+            ),
             "allow_needs_revision": "needs_revision" in statuses,
         },
         "files": [

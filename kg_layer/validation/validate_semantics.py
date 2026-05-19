@@ -270,7 +270,7 @@ def validate_items(
                         )
                 else:
                     concept_keys[key] = (idx, obj)
-            if obj.get("review_status") == "accepted" and not str((canonical_label or span or "")).strip():
+            if obj.get("review_status") == "accepted" and not str(canonical_label or "").strip():
                 errors.append(f"[{source_name}:{idx}] Accepted Concept must include canonical_label: {label}")
             if canonical_id:
                 if canonical_id in canonical_id_to_label:

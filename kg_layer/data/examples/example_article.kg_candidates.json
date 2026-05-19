@@ -41,6 +41,7 @@
       "reviewer_notes": "Core concept; well-defined in the Introduction.",
       "article_id": "adaptive-memory-consolidation-2026",
       "run_id": "ars-run-2026-05-17-001",
+      "canonical_label": "Adaptive Memory Consolidation",
       "canonical_id": "concept:adaptive-memory-consolidation",
       "aliases": [
         "AMC"
@@ -64,6 +65,7 @@
       "reviewer_notes": "Relevant enabling mechanism; well-cited.",
       "article_id": "adaptive-memory-consolidation-2026",
       "run_id": "ars-run-2026-05-17-001",
+      "canonical_label": "Synaptic Plasticity",
       "canonical_id": "concept:synaptic-plasticity",
       "ontology_mappings": [
         "https://www.wikidata.org/wiki/Q1139176"

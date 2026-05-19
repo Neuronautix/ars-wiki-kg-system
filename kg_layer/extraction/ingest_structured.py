@@ -19,7 +19,7 @@ ALLOWED_REVIEW_STATUS = {"pending", "in_review", "accepted", "rejected", "needs_
 ALLOWED_RELATION_TYPES = {"supports", "contradicts", "relates_to_concept", "derived_from", "cites", "same_as"}
 ID_RE = re.compile(r"^(paper|concept|claim|evidence):[a-z0-9][a-z0-9-]*:\d+$")
 DOI_RE = re.compile(r"^10\.\d{4,9}/[-._;()/:A-Z0-9]+$", re.IGNORECASE)
-URL_RE = re.compile(r"^https?://[^\s]+$")
+URL_RE = re.compile(r"^https?://[^\s<>{}|\\^`\[\]\"]+$")
 
 
 def normalize_item(item: Dict, article_metadata: Dict) -> Dict:
