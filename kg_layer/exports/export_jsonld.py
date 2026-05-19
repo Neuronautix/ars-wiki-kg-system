@@ -3,37 +3,12 @@ import json
 from pathlib import Path
 from typing import Dict, List
 
+try:
+    from kg_layer.exports.jsonld_utils import DEFAULT_BASE_IRI, build_jsonld_doc
+except ModuleNotFoundError:
+    from jsonld_utils import DEFAULT_BASE_IRI, build_jsonld_doc
+
 ALLOWED_STATUS = {"pending", "in_review", "accepted", "rejected", "needs_revision"}
-
-CONTEXT = {
-    "@vocab": "https://example.org/ars/kg#",
-    "source_document": "https://schema.org/isBasedOn",
-    "source_section": "https://schema.org/text",
-    "supporting_quote_or_span": "https://schema.org/quotation",
-    "confidence": "https://schema.org/confidence",
-    "review_status": "https://schema.org/creativeWorkStatus",
-}
-
-PROVENANCE_FIELDS = ("reviewer", "reviewed_at", "article_id", "run_id")
-
-
-def to_jsonld_node(obj: Dict) -> Dict:
-    node = {
-        "@id": obj.get("id"),
-        "@type": obj.get("type"),
-        "source_document": obj.get("source_document"),
-        "source_section": obj.get("source_section"),
-        "supporting_quote_or_span": obj.get("supporting_quote_or_span"),
-        "confidence": obj.get("confidence"),
-        "extraction_method": obj.get("extraction_method"),
-        "review_status": obj.get("review_status"),
-        "reviewer_notes": obj.get("reviewer_notes", ""),
-    }
-    # Preserve provenance fields when present.
-    for field in PROVENANCE_FIELDS:
-        if obj.get(field):
-            node[field] = obj[field]
-    return node
 
 
 def main() -> None:
@@ -47,6 +22,11 @@ def main() -> None:
         choices=sorted(ALLOWED_STATUS),
         help="Review status to include in export. Repeatable. Defaults to accepted.",
     )
+    parser.add_argument(
+        "--base-iri",
+        default=DEFAULT_BASE_IRI,
+        help=f"Base IRI for generated object and article identifiers. Defaults to {DEFAULT_BASE_IRI}",
+    )
     args = parser.parse_args()
 
     input_path = Path(args.input)
@@ -59,10 +39,7 @@ def main() -> None:
     statuses = set(args.include_status or ["accepted"])
     accepted = [o for o in objects if o.get("review_status") in statuses]
 
-    doc = {
-        "@context": CONTEXT,
-        "@graph": [to_jsonld_node(o) for o in accepted]
-    }
+    doc = build_jsonld_doc(accepted, args.base_iri)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(json.dumps(doc, indent=2, ensure_ascii=False), encoding="utf-8")

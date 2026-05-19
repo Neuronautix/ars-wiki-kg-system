@@ -1,0 +1,237 @@
+@prefix arskg: <https://example.org/ars/kg#> .
+@prefix cito: <http://purl.org/spar/cito/> .
+@prefix dcterms: <http://purl.org/dc/terms/> .
+@prefix oa: <http://www.w3.org/ns/oa#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix prov: <http://www.w3.org/ns/prov#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix schema: <https://schema.org/> .
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+arskg:
+    a owl:Ontology ;
+    dcterms:title "ARS Knowledge Graph Ontology" ;
+    dcterms:description "Compact ontology profile for ARS-derived article, paper, concept, claim, and evidence objects." ;
+    dcterms:created "2026-05-19"^^xsd:date ;
+    dcterms:license <https://creativecommons.org/publicdomain/zero/1.0/> ;
+    owl:versionInfo "0.1.0" .
+
+arskg:Article
+    a owl:Class ;
+    rdfs:label "Article" ;
+    rdfs:comment "An ARS article or generated narrative artifact that contributes KG objects." ;
+    rdfs:subClassOf schema:Article, prov:Entity .
+
+arskg:Paper
+    a owl:Class ;
+    rdfs:label "Paper" ;
+    rdfs:comment "A scholarly paper or paper-like source represented in the ARS KG." ;
+    rdfs:subClassOf schema:ScholarlyArticle, arskg:Article .
+
+arskg:Claim
+    a owl:Class ;
+    rdfs:label "Claim" ;
+    rdfs:comment "A reviewable assertion extracted from an ARS article or source paper." ;
+    rdfs:subClassOf schema:Claim, prov:Entity .
+
+arskg:Evidence
+    a owl:Class ;
+    rdfs:label "Evidence" ;
+    rdfs:comment "A quoted source passage, span, citation, observation, or other artifact used to support or challenge a claim." ;
+    rdfs:subClassOf schema:CreativeWork, prov:Entity .
+
+arskg:Concept
+    a owl:Class ;
+    rdfs:label "Concept" ;
+    rdfs:comment "A controlled or emerging topic, method, mechanism, entity, or phrase identified in the ARS KG." ;
+    rdfs:subClassOf skos:Concept, prov:Entity .
+
+arskg:ReviewStatus
+    a owl:Class ;
+    rdfs:label "Review status" ;
+    rdfs:comment "Controlled status term for human or automated review state." ;
+    rdfs:subClassOf skos:Concept .
+
+arskg:ReviewStatusScheme
+    a skos:ConceptScheme ;
+    skos:prefLabel "ARS KG review statuses" ;
+    dcterms:description "Controlled review status vocabulary used by ARS KG objects." .
+
+arskg:pending
+    a arskg:ReviewStatus, skos:Concept ;
+    skos:inScheme arskg:ReviewStatusScheme ;
+    skos:prefLabel "pending" ;
+    skos:definition "The object has been extracted but not yet reviewed." .
+
+arskg:in_review
+    a arskg:ReviewStatus, skos:Concept ;
+    skos:inScheme arskg:ReviewStatusScheme ;
+    skos:prefLabel "in_review" ;
+    skos:definition "The object is under active review or requires reviewer attention." .
+
+arskg:accepted
+    a arskg:ReviewStatus, skos:Concept ;
+    skos:inScheme arskg:ReviewStatusScheme ;
+    skos:prefLabel "accepted" ;
+    skos:definition "The object has been accepted for publication or reuse." .
+
+arskg:rejected
+    a arskg:ReviewStatus, skos:Concept ;
+    skos:inScheme arskg:ReviewStatusScheme ;
+    skos:prefLabel "rejected" ;
+    skos:definition "The object has been rejected and should not be published as accepted knowledge." .
+
+arskg:needs_revision
+    a arskg:ReviewStatus, skos:Concept ;
+    skos:inScheme arskg:ReviewStatusScheme ;
+    skos:prefLabel "needs_revision" ;
+    skos:definition "The object is plausible but requires correction, qualification, or additional evidence before acceptance." .
+
+arskg:sourceDocument
+    a owl:ObjectProperty ;
+    rdfs:label "source document" ;
+    rdfs:comment "Document, article, paper, file artifact, or URI from which a KG object was extracted." ;
+    rdfs:subPropertyOf dcterms:source, prov:wasDerivedFrom ;
+    rdfs:range prov:Entity .
+
+arskg:sourceDocumentRef
+    a owl:DatatypeProperty ;
+    rdfs:label "source document reference" ;
+    rdfs:comment "Literal path, slug, or artifact identifier for the source document when no resolvable source document IRI is available." ;
+    rdfs:range xsd:string .
+
+arskg:article
+    a owl:ObjectProperty ;
+    rdfs:label "article" ;
+    rdfs:comment "Parent ARS article associated with a KG object." ;
+    rdfs:subPropertyOf dcterms:isPartOf ;
+    rdfs:range arskg:Article .
+
+arskg:articleId
+    a owl:DatatypeProperty ;
+    rdfs:label "article ID" ;
+    rdfs:comment "Pipeline article identifier propagated from ARS handoff files." ;
+    rdfs:range xsd:string .
+
+arskg:runId
+    a owl:DatatypeProperty ;
+    rdfs:label "run ID" ;
+    rdfs:comment "ARS run identifier for cross-run traceability." ;
+    rdfs:range xsd:string .
+
+arskg:sourceSection
+    a owl:DatatypeProperty ;
+    rdfs:label "source section" ;
+    rdfs:comment "Section heading or local source label where the KG object was found." ;
+    rdfs:range xsd:string .
+
+arskg:sourceSpan
+    a owl:DatatypeProperty ;
+    rdfs:label "source span" ;
+    rdfs:comment "Exact source text span, quote, selector text, or compact span locator used to ground the object." ;
+    rdfs:range xsd:string .
+
+arskg:selector
+    a owl:ObjectProperty ;
+    rdfs:label "selector" ;
+    rdfs:comment "Web Annotation selector that locates the source passage in a source document." ;
+    rdfs:subPropertyOf oa:selector ;
+    rdfs:range oa:Selector .
+
+arskg:quote
+    a owl:DatatypeProperty ;
+    rdfs:label "quote" ;
+    rdfs:comment "Exact quotation used as evidence or as the text span from which an object was extracted." ;
+    rdfs:subPropertyOf schema:quotation ;
+    rdfs:range xsd:string .
+
+arskg:text
+    a owl:DatatypeProperty ;
+    rdfs:label "text" ;
+    rdfs:comment "Canonical text of a claim, evidence statement, or extracted object." ;
+    rdfs:subPropertyOf schema:text ;
+    rdfs:range xsd:string .
+
+arskg:confidence
+    a owl:DatatypeProperty ;
+    rdfs:label "confidence" ;
+    rdfs:comment "Normalized confidence score in the closed interval [0, 1]." ;
+    rdfs:range xsd:decimal .
+
+arskg:reviewStatus
+    a owl:ObjectProperty ;
+    rdfs:label "review status" ;
+    rdfs:comment "Controlled review status assigned to an extracted KG object." ;
+    rdfs:range arskg:ReviewStatus .
+
+arskg:extractionMethod
+    a owl:DatatypeProperty ;
+    rdfs:label "extraction method" ;
+    rdfs:comment "Name of the method or pipeline stage that produced the object." ;
+    rdfs:range xsd:string .
+
+arskg:reviewer
+    a owl:DatatypeProperty ;
+    rdfs:label "reviewer" ;
+    rdfs:comment "Reviewer identity recorded by the HITL process." ;
+    rdfs:range xsd:string .
+
+arskg:reviewedAt
+    a owl:DatatypeProperty ;
+    rdfs:label "reviewed at" ;
+    rdfs:comment "Timestamp of the review decision." ;
+    rdfs:range xsd:dateTime .
+
+arskg:reviewerNotes
+    a owl:DatatypeProperty ;
+    rdfs:label "reviewer notes" ;
+    rdfs:comment "Free-text notes captured during review." ;
+    rdfs:range xsd:string .
+
+arskg:supportedBy
+    a owl:ObjectProperty ;
+    rdfs:label "supported by" ;
+    rdfs:comment "Evidence that supports a claim." ;
+    rdfs:domain arskg:Claim ;
+    rdfs:range arskg:Evidence ;
+    rdfs:subPropertyOf cito:isSupportedBy .
+
+arskg:supports
+    a owl:ObjectProperty ;
+    rdfs:label "supports" ;
+    rdfs:comment "Claim supported by this evidence." ;
+    rdfs:domain arskg:Evidence ;
+    rdfs:range arskg:Claim ;
+    rdfs:subPropertyOf cito:supports ;
+    owl:inverseOf arskg:supportedBy .
+
+arskg:contradictedBy
+    a owl:ObjectProperty ;
+    rdfs:label "contradicted by" ;
+    rdfs:comment "Evidence that contradicts or challenges a claim." ;
+    rdfs:domain arskg:Claim ;
+    rdfs:range arskg:Evidence ;
+    rdfs:subPropertyOf cito:isDisputedBy .
+
+arskg:relatesToConcept
+    a owl:ObjectProperty ;
+    rdfs:label "relates to concept" ;
+    rdfs:comment "Concept associated with a claim, evidence item, paper, or article." ;
+    rdfs:range arskg:Concept ;
+    rdfs:subPropertyOf schema:about .
+
+arskg:relatedEvidence
+    a owl:ObjectProperty ;
+    rdfs:label "related evidence" ;
+    rdfs:comment "Evidence item related to another evidence item, claim, paper, article, or concept." ;
+    rdfs:range arskg:Evidence ;
+    rdfs:subPropertyOf dcterms:relation .
+
+arskg:derivesArticle
+    a owl:ObjectProperty ;
+    rdfs:label "derives article" ;
+    rdfs:comment "Links an extracted object or evidence item to the ARS article it helps derive or substantiate." ;
+    rdfs:range arskg:Article ;
+    rdfs:subPropertyOf prov:wasDerivedFrom .

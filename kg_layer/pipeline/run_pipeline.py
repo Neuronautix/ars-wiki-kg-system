@@ -8,6 +8,11 @@ from fnmatch import fnmatch
 from pathlib import Path
 from typing import Dict, List
 
+try:
+    from kg_layer.exports.jsonld_utils import DEFAULT_BASE_IRI
+except ModuleNotFoundError:
+    DEFAULT_BASE_IRI = "https://example.org/ars/kg/"
+
 ALL_STATUSES = ["pending", "in_review", "accepted", "rejected", "needs_revision"]
 DRAFT_STATUSES = ["pending", "in_review", "accepted", "needs_revision"]
 AUTO_REVIEWER = "pipeline_auto"
@@ -31,6 +36,20 @@ def run_cmd(args: List[str]) -> None:
 def resolve_repo_path(repo_root: Path, path_value: str) -> Path:
     path = Path(path_value)
     return path if path.is_absolute() else (repo_root / path)
+
+
+def run_handoff_validation(repo_root: Path, structured_input_dir: Path) -> None:
+    validate_handoff_script = repo_root / "kg_layer" / "validation" / "validate_ars_handoff.py"
+    result = subprocess.run([sys.executable, str(validate_handoff_script), str(structured_input_dir)])
+    if result.returncode:
+        raise SystemExit(result.returncode)
+
+
+def run_semantic_validation(repo_root: Path, paths: List[Path]) -> None:
+    validate_semantics_script = repo_root / "kg_layer" / "validation" / "validate_semantics.py"
+    result = subprocess.run([sys.executable, str(validate_semantics_script), *(str(path) for path in paths)])
+    if result.returncode:
+        raise SystemExit(result.returncode)
 
 
 def list_markdown_files(input_dir: Path, include_glob: List[str], exclude_glob: List[str]) -> List[Path]:
@@ -274,7 +293,16 @@ def run_once(args) -> None:
 
         # ── Global export + wiki ─────────────────────────────────────────────
         publish_statuses = resolve_publish_statuses(args.publish_mode, args.publish_status)
-        export_cmd = [sys.executable, str(export_script), "--input", str(reviewed_path), "--output", str(jsonld_path)]
+        export_cmd = [
+            sys.executable,
+            str(export_script),
+            "--input",
+            str(reviewed_path),
+            "--output",
+            str(jsonld_path),
+            "--base-iri",
+            args.base_iri,
+        ]
         wiki_cmd = [sys.executable, str(wiki_script), "--input", str(reviewed_path), "--output-dir", str(wiki_dir)]
         for status in publish_statuses:
             export_cmd.extend(["--include-status", status])
@@ -291,6 +319,8 @@ def run_once(args) -> None:
             str(reviewed_path),
             "--output-dir",
             str(per_article_dir),
+            "--base-iri",
+            args.base_iri,
         ]
         for status in publish_statuses:
             per_article_cmd.extend(["--include-status", status])
@@ -307,6 +337,11 @@ def main() -> None:
     parser.add_argument("--input-dir", default="kg_layer/data/raw", help="Input markdown directory.")
     parser.add_argument("--data-root", default="kg_layer/data", help="Base data directory for outputs.")
     parser.add_argument("--reviews", default="kg_layer/review/reviews.json", help="Review decisions JSON file.")
+    parser.add_argument(
+        "--base-iri",
+        default=DEFAULT_BASE_IRI,
+        help=f"Base IRI for JSON-LD exports. Defaults to {DEFAULT_BASE_IRI}",
+    )
     parser.add_argument("--include-glob", action="append", default=[], help="Optional extraction include glob. Repeatable.")
     parser.add_argument("--exclude-glob", action="append", default=[], help="Optional extraction exclude glob. Repeatable.")
     parser.add_argument(
@@ -316,6 +351,19 @@ def main() -> None:
             "Directory containing *.kg_candidates.json ARS HITL handoff files. "
             "When present and files exist, structured input is preferred over markdown extraction. "
             "A valid but empty directory falls back to markdown extraction."
+        ),
+    )
+    parser.add_argument(
+        "--validate-only",
+        action="store_true",
+        help="Validate --structured-input-dir handoff files and exit before extraction or publishing.",
+    )
+    parser.add_argument(
+        "--semantic-validate-only",
+        action="store_true",
+        help=(
+            "Run ontology-quality semantic validation and exit. Validates --structured-input-dir when set; "
+            "otherwise validates the reviewed objects file under --data-root."
         ),
     )
     add_bool_arg(
@@ -370,8 +418,20 @@ def main() -> None:
 
     if args.merge_structured_and_markdown and not structured_input_dir:
         raise SystemExit("--merge-structured-and-markdown requires --structured-input-dir")
+    if args.validate_only and not structured_input_dir:
+        raise SystemExit("--validate-only requires --structured-input-dir")
     if structured_input_dir:
         validate_structured_input_dir(structured_input_dir)
+
+    if args.validate_only:
+        run_handoff_validation(repo_root, structured_input_dir)
+        return
+    if args.semantic_validate_only:
+        semantic_paths = [structured_input_dir] if structured_input_dir else [
+            resolve_repo_path(repo_root, args.data_root).resolve() / "reviewed" / "reviewed.json"
+        ]
+        run_semantic_validation(repo_root, semantic_paths)
+        return
 
     if not args.watch:
         run_once(args)

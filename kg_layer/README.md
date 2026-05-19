@@ -58,7 +58,7 @@ Verification Report are mapped into KG review statuses:
 | ARS verdict | KG review_status |
 |---|---|
 | `VERIFIED` | `accepted` |
-| `MINOR_DISTORTION` | `accepted` |
+| `MINOR_DISTORTION` | `needs_revision` |
 | `MAJOR_DISTORTION` | `needs_revision` |
 | `UNVERIFIABLE` | `rejected` |
 | `UNVERIFIABLE_ACCESS` | `in_review` |
@@ -66,6 +66,23 @@ Verification Report are mapped into KG review statuses:
 If the report is unavailable, omit `--claim-verification-report`; the exporter
 uses article markdown extraction and assigns `--fallback-status` to extracted
 items (default: `accepted`).
+
+Validate handoff files before publishing:
+
+```bash
+python3 kg_layer/pipeline/run_pipeline.py \
+  --structured-input-dir /path/to/ars/hitl/outputs \
+  --validate-only
+```
+
+Run ontology-quality semantic validation when the handoff includes claim/evidence
+links and source citations:
+
+```bash
+python3 kg_layer/pipeline/run_pipeline.py \
+  --structured-input-dir /path/to/ars/hitl/outputs \
+  --semantic-validate-only
+```
 
 See `kg_layer/schemas/ars_handoff_schema.json` for the schema and
 `kg_layer/data/examples/example_article.kg_candidates.json` for a worked example.
@@ -162,6 +179,9 @@ Example file: `kg_layer/data/examples/example_article.kg_candidates.json`
 
 - `--input-dir`: markdown input directory (default: `kg_layer/data/raw`).
 - `--structured-input-dir`: directory with `*.kg_candidates.json` ARS HITL handoff files.
+- `--validate-only`: validate structured ARS handoff files and exit without publishing (requires `--structured-input-dir`).
+- `--semantic-validate-only`: run ontology-quality semantic validation and exit.
+- `--base-iri`: base IRI for JSON-LD exports (default: `https://example.org/ars/kg/`).
 - `--merge-structured-and-markdown`: merge both sources instead of preferring structured (requires `--structured-input-dir`).
 - `--include-glob` / `--exclude-glob`: markdown extraction file filters.
 - `--publish-mode accepted|draft|all`: publishing status policy.

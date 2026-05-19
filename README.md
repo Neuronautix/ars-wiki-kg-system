@@ -121,6 +121,23 @@ If you only have the final article, omit `--claim-verification-report`; the
 exporter falls back to markdown extraction and stamps the extracted items with
 `--fallback-status` (default: `accepted`).
 
+To check ARS-emitted handoff files before publishing:
+
+```bash
+python3 kg_layer/pipeline/run_pipeline.py \
+  --structured-input-dir kg_layer/data/ars_handoff \
+  --validate-only
+```
+
+For ontology-quality checks, use semantic validation. This is stricter than JSON
+shape validation and requires accepted claims to link to supporting evidence:
+
+```bash
+python3 kg_layer/pipeline/run_pipeline.py \
+  --structured-input-dir kg_layer/data/ars_handoff \
+  --semantic-validate-only
+```
+
 See [`kg_layer/data/examples/example_article.kg_candidates.json`](kg_layer/data/examples/example_article.kg_candidates.json)
 for the exact file format, and [`kg_layer/schemas/ars_handoff_schema.json`](kg_layer/schemas/ars_handoff_schema.json)
 for the full JSON Schema.
@@ -270,6 +287,9 @@ python kg_layer/pipeline/run_pipeline.py [options]
 |---|---|
 | `--input-dir DIR` | Markdown input directory (default: `kg_layer/data/raw`). |
 | `--structured-input-dir DIR` | Directory of `*.kg_candidates.json` ARS HITL handoff files. Preferred over markdown when files are found; a valid but empty directory falls back to markdown, while missing/non-directory paths fail fast. |
+| `--validate-only` | Validate structured ARS handoff files and exit without publishing. Requires `--structured-input-dir`. |
+| `--semantic-validate-only` | Run ontology-quality semantic validation and exit. Validates `--structured-input-dir` when set, otherwise validates reviewed objects under `--data-root`. |
+| `--base-iri IRI` | Base IRI for JSON-LD exports (default: `https://example.org/ars/kg/`). |
 | `--merge-structured-and-markdown` | Combine structured and markdown candidates instead of preferring one source. Requires `--structured-input-dir`. |
 | `--data-root DIR` | Base output directory (default: `kg_layer/data`). |
 | `--reviews FILE` | Review decisions JSON (default: `kg_layer/review/reviews.json`). |

@@ -60,6 +60,30 @@ slots:
   run_id:
     required: false
     description: ARS run identifier for cross-run traceability.
+  related_evidence_ids:
+    range: string
+    multivalued: true
+    required: false
+    description: Optional Evidence object ids linked to this item.
+  related_concept_ids:
+    range: string
+    multivalued: true
+    required: false
+    description: Optional Concept object ids linked to this item.
+  source_citation:
+    required: false
+    description: Citation string for the source used to support this item.
+  canonical_label:
+    required: false
+    description: Preferred human-readable label, especially for Concept items.
+  aliases:
+    range: string
+    multivalued: true
+    required: false
+    description: Alternative labels or synonyms for this item.
+  iri:
+    required: false
+    description: Optional explicit stable IRI to use in semantic web exports.
 
 classes:
   BaseExtractedObject:
@@ -76,6 +100,12 @@ classes:
       - reviewed_at
       - article_id
       - run_id
+      - related_evidence_ids
+      - related_concept_ids
+      - source_citation
+      - canonical_label
+      - aliases
+      - iri
 
   Paper:
     is_a: BaseExtractedObject

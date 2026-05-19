@@ -1,0 +1,143 @@
+@prefix arskg: <https://example.org/ars/kg#> .
+@prefix dcterms: <http://purl.org/dc/terms/> .
+@prefix prov: <http://www.w3.org/ns/prov#> .
+@prefix schema: <https://schema.org/> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+arskg:ReviewStatusPropertyShape
+    a sh:PropertyShape ;
+    sh:path arskg:reviewStatus ;
+    sh:minCount 1 ;
+    sh:maxCount 1 ;
+    sh:in (
+        arskg:pending
+        arskg:in_review
+        arskg:accepted
+        arskg:rejected
+        arskg:needs_revision
+    ) ;
+    sh:message "reviewStatus must be one of the ARS KG controlled review status IRIs." .
+
+arskg:ConfidencePropertyShape
+    a sh:PropertyShape ;
+    sh:path arskg:confidence ;
+    sh:minCount 1 ;
+    sh:maxCount 1 ;
+    sh:datatype xsd:decimal ;
+    sh:minInclusive 0 ;
+    sh:maxInclusive 1 ;
+    sh:message "confidence must be a decimal value between 0 and 1 inclusive." .
+
+arskg:ArticleOrPaperShape
+    a sh:NodeShape ;
+    sh:targetClass arskg:Article, arskg:Paper, schema:Article, schema:ScholarlyArticle ;
+    sh:property [
+        sh:path dcterms:title ;
+        sh:minCount 1 ;
+        sh:datatype xsd:string ;
+        sh:message "Article/Paper nodes should have a dcterms:title string." ;
+    ] ;
+    sh:property [
+        sh:path arskg:sourceDocumentRef ;
+        sh:minCount 1 ;
+        sh:datatype xsd:string ;
+        sh:message "Article/Paper nodes must carry a sourceDocumentRef when no stronger source document node is modeled." ;
+    ] .
+
+arskg:ClaimShape
+    a sh:NodeShape ;
+    sh:targetClass arskg:Claim ;
+    sh:property [
+        sh:path arskg:text ;
+        sh:minCount 1 ;
+        sh:datatype xsd:string ;
+        sh:minLength 1 ;
+        sh:message "Claim must have canonical text." ;
+    ] ;
+    sh:property [
+        sh:path arskg:sourceSpan ;
+        sh:minCount 1 ;
+        sh:datatype xsd:string ;
+        sh:minLength 1 ;
+        sh:message "Claim must have a source span." ;
+    ] ;
+    sh:property [
+        sh:path prov:wasDerivedFrom ;
+        sh:minCount 1 ;
+        sh:message "Claim must identify a source entity via prov:wasDerivedFrom." ;
+    ] ;
+    sh:property [
+        sh:path arskg:sourceDocumentRef ;
+        sh:minCount 1 ;
+        sh:datatype xsd:string ;
+        sh:message "Claim must identify its source document reference." ;
+    ] ;
+    sh:property [
+        sh:path arskg:supportedBy ;
+        sh:class arskg:Evidence ;
+        sh:message "supportedBy values must be Evidence nodes." ;
+    ] ;
+    sh:property arskg:ReviewStatusPropertyShape ;
+    sh:property arskg:ConfidencePropertyShape ;
+    sh:sparql [
+        sh:message "Accepted Claim must have at least one arskg:supportedBy Evidence." ;
+        sh:select """
+            PREFIX arskg: <https://example.org/ars/kg#>
+            SELECT $this
+            WHERE {
+              $this arskg:reviewStatus arskg:accepted .
+              FILTER NOT EXISTS { $this arskg:supportedBy ?evidence . }
+            }
+        """ ;
+    ] .
+
+arskg:EvidenceShape
+    a sh:NodeShape ;
+    sh:targetClass arskg:Evidence ;
+    sh:property [
+        sh:path arskg:quote ;
+        sh:minCount 1 ;
+        sh:datatype xsd:string ;
+        sh:minLength 1 ;
+        sh:message "Evidence must preserve an exact quote." ;
+    ] ;
+    sh:property [
+        sh:path arskg:sourceSpan ;
+        sh:minCount 1 ;
+        sh:datatype xsd:string ;
+        sh:minLength 1 ;
+        sh:message "Evidence must have a source span." ;
+    ] ;
+    sh:property [
+        sh:path arskg:sourceDocumentRef ;
+        sh:minCount 1 ;
+        sh:datatype xsd:string ;
+        sh:message "Evidence must identify its source document reference." ;
+    ] ;
+    sh:property [
+        sh:path arskg:supports ;
+        sh:class arskg:Claim ;
+        sh:message "supports values must be Claim nodes." ;
+    ] ;
+    sh:property arskg:ReviewStatusPropertyShape ;
+    sh:property arskg:ConfidencePropertyShape .
+
+arskg:ConceptShape
+    a sh:NodeShape ;
+    sh:targetClass arskg:Concept, skos:Concept ;
+    sh:property [
+        sh:path skos:prefLabel ;
+        sh:minCount 1 ;
+        sh:datatype xsd:string ;
+        sh:minLength 1 ;
+        sh:message "Concept must have a skos:prefLabel." ;
+    ] ;
+    sh:property [
+        sh:path arskg:relatedEvidence ;
+        sh:class arskg:Evidence ;
+        sh:message "relatedEvidence values must be Evidence nodes." ;
+    ] ;
+    sh:property arskg:ReviewStatusPropertyShape ;
+    sh:property arskg:ConfidencePropertyShape .

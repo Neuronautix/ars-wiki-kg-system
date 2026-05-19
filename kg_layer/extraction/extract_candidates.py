@@ -36,7 +36,7 @@ def sentence_split(block: str) -> List[str]:
 
 
 def build_object(object_type: str, object_id: str, source_document: str, source_section: str, span: str, confidence: float, method: str) -> Dict:
-    return {
+    obj = {
         "type": object_type,
         "id": object_id,
         "source_document": source_document,
@@ -47,6 +47,10 @@ def build_object(object_type: str, object_id: str, source_document: str, source_
         "review_status": "pending",
         "reviewer_notes": ""
     }
+    if object_type == "Concept":
+        obj["canonical_label"] = span
+        obj["aliases"] = []
+    return obj
 
 
 def extract_from_file(path: Path, source_document: str) -> List[Dict]:

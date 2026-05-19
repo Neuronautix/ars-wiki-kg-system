@@ -14,7 +14,7 @@ from kg_layer.extraction.extract_candidates import extract_from_file
 
 VERDICT_TO_STATUS = {
     "VERIFIED": "accepted",
-    "MINOR_DISTORTION": "accepted",
+    "MINOR_DISTORTION": "needs_revision",
     "MAJOR_DISTORTION": "needs_revision",
     "UNVERIFIABLE": "rejected",
     "UNVERIFIABLE_ACCESS": "in_review",
@@ -108,6 +108,7 @@ def build_object(
     notes: str,
     article_id: str,
     run_id: Optional[str],
+    extra: Optional[Dict] = None,
 ) -> Dict:
     obj = {
         "id": object_id,
@@ -122,6 +123,8 @@ def build_object(
     }
     if run_id:
         obj["run_id"] = run_id
+    if extra:
+        obj.update({k: v for k, v in extra.items() if v not in (None, "", [])})
     return obj
 
 
@@ -138,6 +141,8 @@ def concept_candidates(article_path: Path, source_document: str, article_id: str
         seen.add(key)
         obj["id"] = f"concept:{article_id}:{len(concepts) + 1}"
         obj["article_id"] = article_id
+        obj["canonical_label"] = span
+        obj.setdefault("aliases", [])
         if run_id:
             obj["run_id"] = run_id
         obj["extraction_method"] = "ars_article_concept_heuristic"
@@ -167,10 +172,13 @@ def claim_objects_from_report(
         if detail:
             notes = f"{notes}. {detail}"
 
+        claim_id = f"claim:{article_id}:{idx}"
+        evidence_id = f"evidence:{article_id}:{idx}"
+
         objects.append(
             build_object(
                 "Claim",
-                f"claim:{article_id}:{idx}",
+                claim_id,
                 source_document,
                 section,
                 claim,
@@ -181,6 +189,10 @@ def claim_objects_from_report(
                 notes,
                 article_id,
                 run_id,
+                {
+                    "related_evidence_ids": [evidence_id],
+                    "source_citation": source,
+                },
             )
         )
 
@@ -191,7 +203,7 @@ def claim_objects_from_report(
         objects.append(
             build_object(
                 "Evidence",
-                f"evidence:{article_id}:{idx}",
+                evidence_id,
                 source_document,
                 section,
                 evidence_span,
@@ -202,6 +214,9 @@ def claim_objects_from_report(
                 evidence_notes,
                 article_id,
                 run_id,
+                {
+                    "source_citation": source,
+                },
             )
         )
 

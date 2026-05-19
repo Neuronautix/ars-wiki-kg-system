@@ -106,6 +106,39 @@
         "run_id": {
           "type": "string",
           "description": "ARS run identifier (propagated from the parent handoff object if not set here)."
+        },
+        "related_evidence_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Optional Evidence object ids linked to this item."
+        },
+        "related_concept_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Optional Concept object ids linked to this item."
+        },
+        "source_citation": {
+          "type": "string",
+          "description": "Citation string for the source used to support this item."
+        },
+        "canonical_label": {
+          "type": "string",
+          "description": "Preferred human-readable label, especially for Concept items."
+        },
+        "aliases": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Alternative labels or synonyms for this item."
+        },
+        "iri": {
+          "type": "string",
+          "description": "Optional explicit stable IRI to use in semantic web exports."
         }
       }
     }
