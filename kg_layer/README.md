@@ -40,7 +40,33 @@ ARS synthesizes an article and, during the HITL loop, generates structured KG ca
 
 ### 2. Export ARS HITL outputs
 
-Export the reviewed suggestions as one `*.kg_candidates.json` handoff file per article.
+Export the reviewed suggestions as one `*.kg_candidates.json` handoff file per article:
+
+```bash
+python3 kg_layer/ars_export/export_kg_candidates.py \
+  --article /path/to/ars/article.md \
+  --claim-verification-report /path/to/ars/claim_verification_report.md \
+  --output-dir /path/to/ars/hitl/outputs \
+  --article-id my-article-2026 \
+  --run-id ars-run-2026-05-17-001 \
+  --reviewer alice
+```
+
+When `--claim-verification-report` is provided, verdicts from the ARS Claim
+Verification Report are mapped into KG review statuses:
+
+| ARS verdict | KG review_status |
+|---|---|
+| `VERIFIED` | `accepted` |
+| `MINOR_DISTORTION` | `accepted` |
+| `MAJOR_DISTORTION` | `needs_revision` |
+| `UNVERIFIABLE` | `rejected` |
+| `UNVERIFIABLE_ACCESS` | `in_review` |
+
+If the report is unavailable, omit `--claim-verification-report`; the exporter
+uses article markdown extraction and assigns `--fallback-status` to extracted
+items (default: `accepted`).
+
 See `kg_layer/schemas/ars_handoff_schema.json` for the schema and
 `kg_layer/data/examples/example_article.kg_candidates.json` for a worked example.
 

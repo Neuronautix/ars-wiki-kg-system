@@ -54,8 +54,23 @@ cd ars-wiki-kg-system
 
 ### Step 2 — Produce ARS HITL handoff files
 
-After a research run, export structured KG candidates from the ARS HITL loop into a
-directory as `*.kg_candidates.json` files.
+After a research run, export structured KG candidates from the final ARS article
+and, when available, the ARS Claim Verification Report:
+
+```bash
+python3 kg_layer/ars_export/export_kg_candidates.py \
+  --article /path/to/ars/article.md \
+  --claim-verification-report /path/to/ars/claim_verification_report.md \
+  --output-dir /path/to/ars/hitl/outputs \
+  --article-id my-article-2026 \
+  --run-id ars-run-2026-05-17-001 \
+  --reviewer alice
+```
+
+The exporter writes one `*.kg_candidates.json` file into the output directory.
+If you only have the final article, omit `--claim-verification-report`; the
+exporter falls back to markdown extraction and stamps the extracted items with
+`--fallback-status` (default: `accepted`).
 
 See [`kg_layer/data/examples/example_article.kg_candidates.json`](kg_layer/data/examples/example_article.kg_candidates.json)
 for the exact file format, and [`kg_layer/schemas/ars_handoff_schema.json`](kg_layer/schemas/ars_handoff_schema.json)
