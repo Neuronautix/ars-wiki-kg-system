@@ -106,11 +106,7 @@ def validate_items(
     errors: List[str] = []
     warnings: List[str] = []
     seen_ids: Dict[str, int] = {}
-    ids: Set[str] = {
-        str(obj.get("id")).strip()
-        for obj in items
-        if obj.get("id") is not None and str(obj.get("id")).strip()
-    }
+    ids: Set[str] = set()
 
     reference_ids = known_ids if known_ids is not None else ids
 
@@ -128,6 +124,7 @@ def validate_items(
                 )
             else:
                 seen_ids[obj_id_str] = idx
+                ids.add(obj_id_str)
 
         confidence = obj.get("confidence")
         if confidence is not None:
@@ -173,10 +170,6 @@ def validate_items(
                             f"[{source_name}:{idx}] relation_edges[{rel_idx}] invalid relation_type for {label}: "
                             f"{relation_type}"
                         )
-                    if target_id and target_id not in reference_ids:
-                        errors.append(
-                            f"[{source_name}:{idx}] relation_edges[{rel_idx}] target_id missing for {label}: {target_id}"
-                        )
                     rel_conf = edge.get("confidence")
                     if rel_conf is not None:
                         try:
@@ -213,6 +206,17 @@ def validate_items(
                 if related_id_str not in reference_ids:
                     errors.append(f"[{source_name}:{idx}] {field} references missing id for {label}: {related_id_str}")
 
+        relation_list = obj.get("relation_edges")
+        if isinstance(relation_list, list):
+            for rel_idx, edge in enumerate(relation_list, start=1):
+                if not isinstance(edge, dict):
+                    continue
+                target_id = str(edge.get("target_id", "")).strip()
+                if target_id and target_id not in reference_ids:
+                    errors.append(
+                        f"[{source_name}:{idx}] relation_edges[{rel_idx}] target_id missing for {label}: {target_id}"
+                    )
+
         if obj_type == "Claim":
             evidence_ids = as_non_empty_list(obj.get("related_evidence_ids"))
             edge_evidence_ids = [
@@ -246,7 +250,7 @@ def validate_items(
                 evidence_obj = evidence_by_id.get(str(evidence_id))
                 if evidence_obj is None:
                     continue
-                if relation_edges(evidence_obj) and not has_reverse_support(evidence_obj, claim_id):
+                if not has_reverse_support(evidence_obj, claim_id):
                     warnings.append(
                         f"[{source_name}:{idx}] Evidence {evidence_id} missing reverse supports edge to claim {claim_id}"
                     )

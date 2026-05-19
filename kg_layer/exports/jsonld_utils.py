@@ -250,13 +250,15 @@ def to_jsonld_node(obj: Dict, iri_by_id: Dict[str, str], base_iri: str) -> Dict:
 def build_graph_release_node(
     objects: List[Dict], base_iri: str, metadata: Optional[Dict] = None
 ) -> Dict:
+    issued_at = datetime.now(timezone.utc)
+    issued_at_str = issued_at.isoformat(timespec="seconds").replace("+00:00", "Z")
     statuses = sorted({str(obj.get("review_status")) for obj in objects if obj.get("review_status")})
     run_ids = sorted({str(obj.get("run_id")) for obj in objects if obj.get("run_id")})
     payload = {
-        "@id": normalize_base_iri(base_iri) + "release/" + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"),
+        "@id": normalize_base_iri(base_iri) + "release/" + issued_at.strftime("%Y%m%dT%H%M%SZ"),
         "@type": "schema:Dataset",
         "dcterms:title": "ARS KG Release",
-        "dcterms:issued": datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
+        "dcterms:issued": issued_at_str,
         "arskg:objectCount": len(objects),
         "arskg:runIds": run_ids,
         "arskg:statuses": statuses,

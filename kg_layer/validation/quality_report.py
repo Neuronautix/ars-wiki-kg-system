@@ -67,11 +67,10 @@ def main() -> None:
 
     orphan_evidence = sorted(evidence_ids - supported_evidence_ids)
     accepted_claim_count = len(accepted_claims)
-    coverage_ratio = (
-        round((accepted_claim_count - claims_without_evidence) / accepted_claim_count, 6)
-        if accepted_claim_count
-        else 0.0
-    )
+    if accepted_claim_count:
+        coverage_ratio = round((accepted_claim_count - claims_without_evidence) / accepted_claim_count, 6)
+    else:
+        coverage_ratio = 0.0
     citation_completeness = round(citation_complete / accepted_claim_count, 6) if accepted_claim_count else 0.0
 
     report = {

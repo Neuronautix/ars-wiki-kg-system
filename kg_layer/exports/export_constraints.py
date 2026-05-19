@@ -2,7 +2,7 @@ import argparse
 import json
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, List, Set, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 
 try:
     from kg_layer.exports.jsonld_utils import DEFAULT_BASE_IRI, object_iri
@@ -16,7 +16,9 @@ def now_utc() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
 
 
-def make_edge(source_id: str, target_id: str, relation_type: str, confidence, provenance: Dict) -> Dict:
+def make_edge(
+    source_id: str, target_id: str, relation_type: str, confidence: Optional[float], provenance: Dict
+) -> Dict:
     edge = {
         "source_id": source_id,
         "target_id": target_id,

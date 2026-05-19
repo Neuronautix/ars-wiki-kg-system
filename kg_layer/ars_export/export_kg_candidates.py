@@ -63,6 +63,13 @@ def is_separator_row(cells: List[str]) -> bool:
     return bool(cells) and all(re.fullmatch(r":?-{3,}:?", cell.strip()) for cell in cells)
 
 
+def citation_ids_from_source(value: str) -> List[str]:
+    source = str(value or "").strip()
+    if source.startswith("http://") or source.startswith("https://"):
+        return [source]
+    return []
+
+
 def parse_claim_verification_report(path: Path) -> List[Dict[str, str]]:
     rows: List[Dict[str, str]] = []
     header: Optional[List[str]] = None
@@ -195,7 +202,7 @@ def claim_objects_from_report(
                 {
                     "related_evidence_ids": [evidence_id],
                     "source_citation": source,
-                    "citation_ids": [source] if source.startswith("http://") or source.startswith("https://") else [],
+                    "citation_ids": citation_ids_from_source(source),
                     "claim_polarity": "supports",
                     "claim_modality": "asserted",
                     "relation_edges": [
@@ -226,7 +233,7 @@ def claim_objects_from_report(
                 run_id,
                 {
                     "source_citation": source,
-                    "citation_ids": [source] if source.startswith("http://") or source.startswith("https://") else [],
+                    "citation_ids": citation_ids_from_source(source),
                     "relation_edges": [
                         {"target_id": claim_id, "relation_type": "supports", "confidence": 0.9}
                     ],

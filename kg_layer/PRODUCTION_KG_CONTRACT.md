@@ -15,6 +15,7 @@ Release is **blocked** unless all of the following pass:
 2. **Provenance completeness**
    - Objects preserve source document/section/span evidence.
    - Accepted claims include citation data (`source_citation` or `citation_ids`).
+   - When span anchors are present, `source_span_end` must be strictly greater than `source_span_start`.
 3. **Semantic consistency**
    - No broken references across related IDs.
    - Accepted claims link evidence through `related_evidence_ids` or typed `relation_edges`.
@@ -33,6 +34,15 @@ Release is **blocked** unless all of the following pass:
 - **Compatibility policy**:
   - `strict`: consumers require exact contract fields/semantics.
   - `backward_compatible`: consumers tolerate additive optional fields.
+
+## Migration Notes (v1.1)
+
+- Semantic validation now treats missing citation data on accepted claims as an **error**
+  (previously a warning in earlier validation behavior).
+- This is intentional for production-grade release gating and downstream grounding reliability.
+- Default JSON-LD base IRI changed from `https://example.org/ars/kg/` to
+  `https://neuronautix.github.io/ars-wiki-kg-system/kg/`. Existing consumers that
+  relied on the old default should pass `--base-iri` explicitly during transition.
 
 ## Required Constraint Signals
 
