@@ -1,0 +1,67 @@
+name: Validate KG Contract and Artifacts
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - master
+      - develop
+      - "feature/**"
+      - "copilot/**"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        check:
+          - handoff
+          - semantics
+          - pipeline
+          - artifacts
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Validate handoff contract
+        if: matrix.check == 'handoff'
+        run: |
+          python3 kg_layer/validation/validate_ars_handoff.py kg_layer/data/examples
+
+      - name: Validate semantic rules
+        if: matrix.check == 'semantics'
+        run: |
+          python3 kg_layer/validation/validate_semantics.py kg_layer/data/examples
+
+      - name: Run full pipeline
+        if: matrix.check == 'pipeline'
+        run: |
+          python3 kg_layer/pipeline/run_pipeline.py \
+            --structured-input-dir kg_layer/data/examples \
+            --data-root /tmp/kg_ci_data
+
+      - name: Verify produced artifacts
+        if: matrix.check == 'artifacts'
+        run: |
+          python3 kg_layer/pipeline/run_pipeline.py \
+            --structured-input-dir kg_layer/data/examples \
+            --data-root /tmp/kg_ci_data
+          test -f /tmp/kg_ci_data/published/graph.jsonld
+          test -f /tmp/kg_ci_data/published/graph.accepted.jsonld
+          test -f /tmp/kg_ci_data/published/graph.draft.jsonld
+          test -f /tmp/kg_ci_data/published/quality/run_quality_report.json
+          test -f /tmp/kg_ci_data/published/quality/quality_trends.json
+          test -f /tmp/kg_ci_data/published/constraints/accepted/constraint_manifest.json
+          test -f /tmp/kg_ci_data/published/constraints/draft/constraint_manifest.json
+          python3 -m json.tool /tmp/kg_ci_data/published/graph.jsonld > /dev/null
+          python3 -m json.tool /tmp/kg_ci_data/published/graph.accepted.jsonld > /dev/null
+          python3 -m json.tool /tmp/kg_ci_data/published/graph.draft.jsonld > /dev/null

@@ -11,11 +11,13 @@ from typing import Dict, List
 try:
     from kg_layer.exports.jsonld_utils import DEFAULT_BASE_IRI
 except ModuleNotFoundError:
-    DEFAULT_BASE_IRI = "https://example.org/ars/kg/"
+    DEFAULT_BASE_IRI = "https://neuronautix.github.io/ars-wiki-kg-system/kg/"
 
 ALL_STATUSES = ["pending", "in_review", "accepted", "rejected", "needs_revision"]
 DRAFT_STATUSES = ["pending", "in_review", "accepted", "needs_revision"]
 AUTO_REVIEWER = "pipeline_auto"
+KG_SCHEMA_VERSION = "1.1.0"
+KG_CONTRACT_VERSION = "1.1"
 
 
 def add_bool_arg(parser: argparse.ArgumentParser, name: str, default: bool, help_text: str) -> None:
@@ -147,8 +149,15 @@ def run_once(args) -> None:
     reviewed_path = data_root / "reviewed" / "reviewed.json"
     review_queue_path = data_root / "review_queue" / "review_queue.json"
     jsonld_path = data_root / "published" / "graph.jsonld"
+    strict_jsonld_path = data_root / "published" / "graph.accepted.jsonld"
+    draft_jsonld_path = data_root / "published" / "graph.draft.jsonld"
     wiki_dir = data_root / "published" / "wiki"
     per_article_dir = data_root / "published" / "per_article"
+    constraints_dir = data_root / "published" / "constraints"
+    quality_dir = data_root / "published" / "quality"
+    release_metadata_path = quality_dir / "release_metadata.json"
+    quality_report_path = quality_dir / "run_quality_report.json"
+    trend_report_path = quality_dir / "quality_trends.json"
 
     extract_script = repo_root / "kg_layer" / "extraction" / "extract_candidates.py"
     ingest_script = repo_root / "kg_layer" / "extraction" / "ingest_structured.py"
@@ -157,7 +166,10 @@ def run_once(args) -> None:
     review_queue_script = repo_root / "kg_layer" / "review" / "build_review_queue.py"
     export_script = repo_root / "kg_layer" / "exports" / "export_jsonld.py"
     per_article_script = repo_root / "kg_layer" / "exports" / "export_per_article.py"
+    constraints_script = repo_root / "kg_layer" / "exports" / "export_constraints.py"
     wiki_script = repo_root / "kg_layer" / "wiki" / "render_wiki_pages.py"
+    quality_script = repo_root / "kg_layer" / "validation" / "quality_report.py"
+    semantic_script = repo_root / "kg_layer" / "validation" / "validate_semantics.py"
 
     previous_reviewed_path = reviewed_path.with_suffix(".previous.json")
     had_previous_reviewed = reviewed_path.exists()
@@ -171,6 +183,9 @@ def run_once(args) -> None:
         structured_files = list_structured_files(structured_input_dir) if structured_input_dir else []
         use_structured = bool(structured_files)
         use_markdown = (not use_structured) or args.merge_structured_and_markdown
+
+        if use_structured and structured_input_dir is not None:
+            run_handoff_validation(repo_root, structured_input_dir)
 
         if structured_input_dir and not use_structured:
             print(
@@ -291,6 +306,36 @@ def run_once(args) -> None:
             queue_cmd.extend(["--previous-reviewed", str(previous_reviewed_path)])
         run_cmd(queue_cmd)
 
+        # ── Semantic release gate ────────────────────────────────────────────
+        run_cmd([sys.executable, str(semantic_script), str(reviewed_path)])
+
+        # ── Quality reporting + release metadata ────────────────────────────
+        run_cmd(
+            [
+                sys.executable,
+                str(quality_script),
+                "--input",
+                str(reviewed_path),
+                "--output",
+                str(quality_report_path),
+                "--trend-file",
+                str(trend_report_path),
+            ]
+        )
+        release_metadata = {
+            "schema_version": KG_SCHEMA_VERSION,
+            "contract_version": KG_CONTRACT_VERSION,
+            "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
+            "base_iri": args.base_iri,
+            "publish_statuses": resolve_publish_statuses(args.publish_mode, args.publish_status),
+            "quality_report": str(quality_report_path),
+            "release_gate": "semantic_validation_passed",
+        }
+        quality_dir.mkdir(parents=True, exist_ok=True)
+        release_metadata_path.write_text(
+            json.dumps(release_metadata, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
+
         # ── Global export + wiki ─────────────────────────────────────────────
         publish_statuses = resolve_publish_statuses(args.publish_mode, args.publish_status)
         export_cmd = [
@@ -302,6 +347,8 @@ def run_once(args) -> None:
             str(jsonld_path),
             "--base-iri",
             args.base_iri,
+            "--metadata-file",
+            str(release_metadata_path),
         ]
         wiki_cmd = [sys.executable, str(wiki_script), "--input", str(reviewed_path), "--output-dir", str(wiki_dir)]
         for status in publish_statuses:
@@ -310,6 +357,38 @@ def run_once(args) -> None:
 
         run_cmd(export_cmd)
         run_cmd(wiki_cmd)
+
+        # Always publish strict accepted and draft graph artifacts.
+        strict_cmd = [
+            sys.executable,
+            str(export_script),
+            "--input",
+            str(reviewed_path),
+            "--output",
+            str(strict_jsonld_path),
+            "--base-iri",
+            args.base_iri,
+            "--metadata-file",
+            str(release_metadata_path),
+            "--include-status",
+            "accepted",
+        ]
+        draft_cmd = [
+            sys.executable,
+            str(export_script),
+            "--input",
+            str(reviewed_path),
+            "--output",
+            str(draft_jsonld_path),
+            "--base-iri",
+            args.base_iri,
+            "--metadata-file",
+            str(release_metadata_path),
+        ]
+        for status in DRAFT_STATUSES:
+            draft_cmd.extend(["--include-status", status])
+        run_cmd(strict_cmd)
+        run_cmd(draft_cmd)
 
         # ── Per-article export ───────────────────────────────────────────────
         per_article_cmd = [
@@ -325,6 +404,49 @@ def run_once(args) -> None:
         for status in publish_statuses:
             per_article_cmd.extend(["--include-status", status])
         run_cmd(per_article_cmd)
+
+        # ── Constraint artifacts ─────────────────────────────────────────────
+        constraint_cmd = [
+            sys.executable,
+            str(constraints_script),
+            "--input",
+            str(reviewed_path),
+            "--output-dir",
+            str(constraints_dir / "selected"),
+            "--base-iri",
+            args.base_iri,
+        ]
+        for status in publish_statuses:
+            constraint_cmd.extend(["--include-status", status])
+        run_cmd(constraint_cmd)
+
+        strict_constraint_cmd = [
+            sys.executable,
+            str(constraints_script),
+            "--input",
+            str(reviewed_path),
+            "--output-dir",
+            str(constraints_dir / "accepted"),
+            "--base-iri",
+            args.base_iri,
+            "--include-status",
+            "accepted",
+        ]
+        run_cmd(strict_constraint_cmd)
+
+        draft_constraint_cmd = [
+            sys.executable,
+            str(constraints_script),
+            "--input",
+            str(reviewed_path),
+            "--output-dir",
+            str(constraints_dir / "draft"),
+            "--base-iri",
+            args.base_iri,
+        ]
+        for status in DRAFT_STATUSES:
+            draft_constraint_cmd.extend(["--include-status", status])
+        run_cmd(draft_constraint_cmd)
 
         print("KG pipeline completed.")
     finally:

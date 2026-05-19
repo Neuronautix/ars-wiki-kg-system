@@ -1,4 +1,11 @@
 {
+  "schema_version": "1.1.0",
+  "contract_version": "1.1",
+  "compatibility_policy": "backward_compatible",
+  "retrieval_policy": {
+    "default_mode": "accepted_only",
+    "allow_needs_revision": true
+  },
   "article_id": "adaptive-memory-consolidation-2026",
   "title": "Adaptive Memory Consolidation in Neural Systems",
   "run_id": "ars-run-2026-05-17-001",
@@ -17,7 +24,8 @@
       "reviewed_at": "2026-05-17T10:00:00Z",
       "reviewer_notes": "Article approved for publication.",
       "article_id": "adaptive-memory-consolidation-2026",
-      "run_id": "ars-run-2026-05-17-001"
+      "run_id": "ars-run-2026-05-17-001",
+      "contract_version": "1.1"
     },
     {
       "id": "concept:adaptive-memory-consolidation-2026:1",
@@ -32,7 +40,16 @@
       "reviewed_at": "2026-05-17T10:05:00Z",
       "reviewer_notes": "Core concept; well-defined in the Introduction.",
       "article_id": "adaptive-memory-consolidation-2026",
-      "run_id": "ars-run-2026-05-17-001"
+      "run_id": "ars-run-2026-05-17-001",
+      "canonical_label": "Adaptive Memory Consolidation",
+      "canonical_id": "concept:adaptive-memory-consolidation",
+      "aliases": [
+        "AMC"
+      ],
+      "ontology_mappings": [
+        "https://www.wikidata.org/wiki/Q8366"
+      ],
+      "contract_version": "1.1"
     },
     {
       "id": "concept:adaptive-memory-consolidation-2026:2",
@@ -47,7 +64,13 @@
       "reviewed_at": "2026-05-17T10:06:00Z",
       "reviewer_notes": "Relevant enabling mechanism; well-cited.",
       "article_id": "adaptive-memory-consolidation-2026",
-      "run_id": "ars-run-2026-05-17-001"
+      "run_id": "ars-run-2026-05-17-001",
+      "canonical_label": "Synaptic Plasticity",
+      "canonical_id": "concept:synaptic-plasticity",
+      "ontology_mappings": [
+        "https://www.wikidata.org/wiki/Q1139176"
+      ],
+      "contract_version": "1.1"
     },
     {
       "id": "claim:adaptive-memory-consolidation-2026:1",
@@ -62,7 +85,32 @@
       "reviewed_at": "2026-05-17T10:10:00Z",
       "reviewer_notes": "Key finding; confirmed against cited study.",
       "article_id": "adaptive-memory-consolidation-2026",
-      "run_id": "ars-run-2026-05-17-001"
+      "run_id": "ars-run-2026-05-17-001",
+      "related_evidence_ids": [
+        "evidence:adaptive-memory-consolidation-2026:1"
+      ],
+      "related_concept_ids": [
+        "concept:adaptive-memory-consolidation-2026:1"
+      ],
+      "source_citation": "https://doi.org/10.1000/amc.2025.001",
+      "citation_ids": [
+        "10.1000/amc.2025.001"
+      ],
+      "claim_polarity": "supports",
+      "claim_modality": "asserted",
+      "relation_edges": [
+        {
+          "target_id": "evidence:adaptive-memory-consolidation-2026:1",
+          "relation_type": "supports",
+          "confidence": 0.92
+        },
+        {
+          "target_id": "concept:adaptive-memory-consolidation-2026:1",
+          "relation_type": "relates_to_concept",
+          "confidence": 0.9
+        }
+      ],
+      "contract_version": "1.1"
     },
     {
       "id": "claim:adaptive-memory-consolidation-2026:2",
@@ -77,7 +125,27 @@
       "reviewed_at": "2026-05-17T11:00:00Z",
       "reviewer_notes": "Statistical significance well-supported by data.",
       "article_id": "adaptive-memory-consolidation-2026",
-      "run_id": "ars-run-2026-05-17-001"
+      "run_id": "ars-run-2026-05-17-001",
+      "related_evidence_ids": [
+        "evidence:adaptive-memory-consolidation-2026:1"
+      ],
+      "related_concept_ids": [
+        "concept:adaptive-memory-consolidation-2026:2"
+      ],
+      "source_citation": "https://doi.org/10.1000/amc.2025.002",
+      "citation_ids": [
+        "10.1000/amc.2025.002"
+      ],
+      "claim_polarity": "supports",
+      "claim_modality": "observed",
+      "relation_edges": [
+        {
+          "target_id": "evidence:adaptive-memory-consolidation-2026:1",
+          "relation_type": "supports",
+          "confidence": 0.87
+        }
+      ],
+      "contract_version": "1.1"
     },
     {
       "id": "evidence:adaptive-memory-consolidation-2026:1",
@@ -92,7 +160,24 @@
       "reviewed_at": "2026-05-17T10:11:00Z",
       "reviewer_notes": "Supporting evidence for claim 1; direct quote preserved.",
       "article_id": "adaptive-memory-consolidation-2026",
-      "run_id": "ars-run-2026-05-17-001"
+      "run_id": "ars-run-2026-05-17-001",
+      "source_citation": "https://doi.org/10.1000/amc.2025.001",
+      "citation_ids": [
+        "10.1000/amc.2025.001"
+      ],
+      "relation_edges": [
+        {
+          "target_id": "claim:adaptive-memory-consolidation-2026:1",
+          "relation_type": "supports",
+          "confidence": 0.9
+        },
+        {
+          "target_id": "claim:adaptive-memory-consolidation-2026:2",
+          "relation_type": "supports",
+          "confidence": 0.85
+        }
+      ],
+      "contract_version": "1.1"
     }
   ]
 }

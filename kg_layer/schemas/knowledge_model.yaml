@@ -8,6 +8,10 @@ default_prefix: km
 default_range: string
 
 enums:
+  ContractVersion:
+    permissible_values:
+      "1.1":
+
   ReviewStatus:
     permissible_values:
       pending:
@@ -24,6 +28,30 @@ enums:
       sentence_as_evidence_proxy:
       title_case_phrase_heuristic:
       file_ingestion:
+
+  ClaimPolarity:
+    permissible_values:
+      supports:
+      contradicts:
+      neutral:
+      uncertain:
+
+  ClaimModality:
+    permissible_values:
+      asserted:
+      observed:
+      inferred:
+      hypothetical:
+      negated:
+
+  RelationType:
+    permissible_values:
+      supports:
+      contradicts:
+      relates_to_concept:
+      derived_from:
+      cites:
+      same_as:
 
 slots:
   id:
@@ -84,8 +112,61 @@ slots:
   iri:
     required: false
     description: Optional explicit stable IRI to use in semantic web exports.
+  source_span_start:
+    range: integer
+    required: false
+    description: Optional inclusive character offset where the extracted span starts.
+  source_span_end:
+    range: integer
+    required: false
+    description: Optional exclusive character offset where the extracted span ends.
+  citation_ids:
+    range: string
+    multivalued: true
+    required: false
+    description: Structured citation identifiers (e.g., DOI, URL, PMID) linked to this item.
+  claim_polarity:
+    range: ClaimPolarity
+    required: false
+    description: Whether the claim supports, contradicts, or is neutral/uncertain regarding its target.
+  claim_modality:
+    range: ClaimModality
+    required: false
+    description: Assertion modality to separate observed facts from inferred or hypothetical statements.
+  relation_edges:
+    range: RelationEdge
+    multivalued: true
+    required: false
+    description: Typed relation edge objects linking this node to another KG node with optional edge confidence.
+  canonical_id:
+    required: false
+    description: Stable canonical identifier for concept/entity normalization across runs.
+  ontology_mappings:
+    range: string
+    multivalued: true
+    required: false
+    description: External ontology IDs/IRIs aligned to this item (e.g., Wikidata, MeSH, GO).
+  contract_version:
+    range: ContractVersion
+    required: false
+    description: KG contract version used to produce this object.
 
 classes:
+  RelationEdge:
+    attributes:
+      relation_target_id:
+        range: string
+        required: true
+        description: Target object identifier for this relation edge.
+      relation_type:
+        range: RelationType
+        required: true
+        description: Relation type between source and target objects.
+      relation_confidence:
+        range: float
+        required: false
+        description: Optional confidence score for this relation edge in [0,1].
+
   BaseExtractedObject:
     slots:
       - id
@@ -106,6 +187,15 @@ classes:
       - canonical_label
       - aliases
       - iri
+      - source_span_start
+      - source_span_end
+      - citation_ids
+      - claim_polarity
+      - claim_modality
+      - relation_edges
+      - canonical_id
+      - ontology_mappings
+      - contract_version
 
   Paper:
     is_a: BaseExtractedObject

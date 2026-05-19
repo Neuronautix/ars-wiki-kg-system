@@ -1,9 +1,10 @@
 import re
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional
 from urllib.parse import quote, urlparse
 
-DEFAULT_BASE_IRI = "https://example.org/ars/kg/"
+DEFAULT_BASE_IRI = "https://neuronautix.github.io/ars-wiki-kg-system/kg/"
 
 TYPE_MAP = {
     "Paper": "schema:ScholarlyArticle",
@@ -47,8 +48,20 @@ CONTEXT = {
         "@id": "arskg:supportedBy",
         "@type": "@id",
     },
+    "supports": {
+        "@id": "arskg:supports",
+        "@type": "@id",
+    },
+    "contradicts": {
+        "@id": "arskg:contradicts",
+        "@type": "@id",
+    },
     "aboutConcept": {
         "@id": "arskg:relatesToConcept",
+        "@type": "@id",
+    },
+    "relatedEvidence": {
+        "@id": "arskg:relatedEvidence",
         "@type": "@id",
     },
     "wasDerivedFrom": {
@@ -59,6 +72,20 @@ CONTEXT = {
         "@id": "dcterms:isPartOf",
         "@type": "@id",
     },
+    "citationIds": "arskg:citationIds",
+    "sourceSpanStart": {
+        "@id": "arskg:sourceSpanStart",
+        "@type": "xsd:integer",
+    },
+    "sourceSpanEnd": {
+        "@id": "arskg:sourceSpanEnd",
+        "@type": "xsd:integer",
+    },
+    "claimPolarity": "arskg:claimPolarity",
+    "claimModality": "arskg:claimModality",
+    "canonicalId": "arskg:canonicalId",
+    "ontologyMappings": "arskg:ontologyMappings",
+    "contractVersion": "arskg:contractVersion",
 }
 
 STATUS_IRIS = {
@@ -93,6 +120,24 @@ def linked_ids(ids: Iterable[str], iri_by_id: Dict[str, str], base_iri: str) -> 
         if item_id:
             links.append({"@id": iri_by_id.get(item_id, normalize_base_iri(base_iri) + compact_identifier(item_id))})
     return links
+
+
+def relation_links(
+    obj: Dict, relation_type: str, iri_by_id: Dict[str, str], base_iri: str, include_all: bool = False
+) -> List[Dict[str, str]]:
+    edges = obj.get("relation_edges")
+    if not isinstance(edges, list):
+        return []
+    ids: List[str] = []
+    for edge in edges:
+        if not isinstance(edge, dict):
+            continue
+        edge_type = str(edge.get("relation_type", "")).strip()
+        if include_all or edge_type == relation_type:
+            target_id = str(edge.get("target_id", "")).strip()
+            if target_id:
+                ids.append(target_id)
+    return linked_ids(ids, iri_by_id, base_iri)
 
 
 def article_key(source_document: str, article_id: Optional[str]) -> str:
@@ -132,6 +177,14 @@ def to_jsonld_node(obj: Dict, iri_by_id: Dict[str, str], base_iri: str) -> Dict:
         "extractionMethod": obj.get("extraction_method"),
         "reviewStatus": STATUS_IRIS.get(str(review_status), review_status),
         "reviewerNotes": obj.get("reviewer_notes", ""),
+        "citationIds": obj.get("citation_ids"),
+        "sourceSpanStart": obj.get("source_span_start"),
+        "sourceSpanEnd": obj.get("source_span_end"),
+        "claimPolarity": obj.get("claim_polarity"),
+        "claimModality": obj.get("claim_modality"),
+        "canonicalId": obj.get("canonical_id"),
+        "ontologyMappings": obj.get("ontology_mappings"),
+        "contractVersion": obj.get("contract_version"),
     }
 
     if obj.get("type") == "Evidence":
@@ -156,12 +209,35 @@ def to_jsonld_node(obj: Dict, iri_by_id: Dict[str, str], base_iri: str) -> Dict:
             node["aliases"] = obj["aliases"]
 
     evidence_links = linked_ids(obj.get("related_evidence_ids", []), iri_by_id, base_iri)
-    if evidence_links:
-        node["supportedBy"] = evidence_links
+    if obj.get("type") == "Claim":
+        evidence_links.extend(relation_links(obj, "supports", iri_by_id, base_iri))
+        dedup_evidence = {}
+        for link in evidence_links:
+            dedup_evidence[link["@id"]] = link
+        evidence_links = list(dedup_evidence.values())
+        if evidence_links:
+            node["supportedBy"] = evidence_links
 
     concept_links = linked_ids(obj.get("related_concept_ids", []), iri_by_id, base_iri)
+    concept_links.extend(relation_links(obj, "relates_to_concept", iri_by_id, base_iri))
+    dedup_concepts = {}
+    for link in concept_links:
+        dedup_concepts[link["@id"]] = link
+    concept_links = list(dedup_concepts.values())
     if concept_links:
         node["aboutConcept"] = concept_links
+
+    contradiction_links = relation_links(obj, "contradicts", iri_by_id, base_iri)
+    if contradiction_links:
+        node["contradicts"] = contradiction_links
+
+    supports_links = relation_links(obj, "supports", iri_by_id, base_iri)
+    if supports_links and obj.get("type") == "Evidence":
+        node["supports"] = supports_links
+
+    related_evidence_links = relation_links(obj, "derived_from", iri_by_id, base_iri, include_all=False)
+    if related_evidence_links:
+        node["relatedEvidence"] = related_evidence_links
 
     source_document = obj.get("source_document")
     if source_document:
@@ -172,7 +248,33 @@ def to_jsonld_node(obj: Dict, iri_by_id: Dict[str, str], base_iri: str) -> Dict:
     return {k: v for k, v in node.items() if v is not None}
 
 
-def build_jsonld_doc(objects: List[Dict], base_iri: str = DEFAULT_BASE_IRI, title_by_article: Optional[Dict[str, str]] = None) -> Dict:
+def build_graph_release_node(
+    objects: List[Dict], base_iri: str, metadata: Optional[Dict] = None
+) -> Dict:
+    issued_at = datetime.now(timezone.utc)
+    issued_at_str = issued_at.isoformat(timespec="seconds").replace("+00:00", "Z")
+    statuses = sorted({str(obj.get("review_status")) for obj in objects if obj.get("review_status")})
+    run_ids = sorted({str(obj.get("run_id")) for obj in objects if obj.get("run_id")})
+    payload = {
+        "@id": normalize_base_iri(base_iri) + "release/" + issued_at.strftime("%Y%m%dT%H%M%SZ"),
+        "@type": "schema:Dataset",
+        "dcterms:title": "ARS KG Release",
+        "dcterms:issued": issued_at_str,
+        "arskg:objectCount": len(objects),
+        "arskg:runIds": run_ids,
+        "arskg:statuses": statuses,
+    }
+    if metadata:
+        payload["arskg:releaseMetadata"] = metadata
+    return payload
+
+
+def build_jsonld_doc(
+    objects: List[Dict],
+    base_iri: str = DEFAULT_BASE_IRI,
+    title_by_article: Optional[Dict[str, str]] = None,
+    metadata: Optional[Dict] = None,
+) -> Dict:
     base_iri = normalize_base_iri(base_iri)
     iri_by_id = {str(obj.get("id")): object_iri(obj, base_iri) for obj in objects if obj.get("id")}
     graph: List[Dict] = []
@@ -187,6 +289,8 @@ def build_jsonld_doc(objects: List[Dict], base_iri: str = DEFAULT_BASE_IRI, titl
                 graph.append(article_node(str(source_document), obj.get("article_id"), base_iri, title))
                 seen_articles.add(art_id)
         graph.append(to_jsonld_node(obj, iri_by_id, base_iri))
+
+    graph.append(build_graph_release_node(objects, base_iri, metadata))
 
     return {
         "@context": CONTEXT,

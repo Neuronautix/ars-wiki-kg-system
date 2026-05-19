@@ -27,6 +27,11 @@ def main() -> None:
         default=DEFAULT_BASE_IRI,
         help=f"Base IRI for generated object and article identifiers. Defaults to {DEFAULT_BASE_IRI}",
     )
+    parser.add_argument(
+        "--metadata-file",
+        default=None,
+        help="Optional JSON file containing graph release metadata to embed in output.",
+    )
     args = parser.parse_args()
 
     input_path = Path(args.input)
@@ -39,7 +44,14 @@ def main() -> None:
     statuses = set(args.include_status or ["accepted"])
     accepted = [o for o in objects if o.get("review_status") in statuses]
 
-    doc = build_jsonld_doc(accepted, args.base_iri)
+    metadata = None
+    if args.metadata_file:
+        metadata_path = Path(args.metadata_file)
+        if not metadata_path.exists():
+            raise SystemExit(f"Metadata file not found: {metadata_path}")
+        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+
+    doc = build_jsonld_doc(accepted, args.base_iri, metadata=metadata)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(json.dumps(doc, indent=2, ensure_ascii=False), encoding="utf-8")

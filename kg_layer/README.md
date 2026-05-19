@@ -102,6 +102,10 @@ metadata (reviewer, reviewed_at, review_status), and publishes:
   - `{article-slug}.graph.jsonld` — JSON-LD graph for that article
 - **Global outputs** in `kg_layer/data/published/`:
   - `graph.jsonld` — combined JSON-LD across all articles
+  - `graph.accepted.jsonld` — strict accepted-only graph
+  - `graph.draft.jsonld` — accepted + draft statuses graph
+  - `constraints/` — retrieval-oriented node/edge/index artifacts
+  - `quality/` — run quality report + trend history
   - `wiki/` — human-readable wiki pages
 
 `article-slug` is a filesystem-safe normalization of `article_id` (or the source
@@ -150,6 +154,8 @@ Each `*.kg_candidates.json` file covers one article:
 
 ```json
 {
+  "schema_version": "1.1.0",
+  "contract_version": "1.1",
   "article_id": "my-article-2026",
   "title": "My Research Article",
   "run_id": "ars-run-2026-05-17-001",
@@ -164,6 +170,10 @@ Each `*.kg_candidates.json` file covers one article:
       "confidence": 0.92,
       "extraction_method": "ars_hitl",
       "review_status": "accepted",
+      "relation_edges": [
+        {"target_id": "evidence:my-article-2026:1", "relation_type": "supports", "confidence": 0.9}
+      ],
+      "citation_ids": ["10.1000/example.123"],
       "reviewer": "alice",
       "reviewed_at": "2026-05-17T10:00:00Z",
       "reviewer_notes": "Confirmed."
@@ -181,7 +191,7 @@ Example file: `kg_layer/data/examples/example_article.kg_candidates.json`
 - `--structured-input-dir`: directory with `*.kg_candidates.json` ARS HITL handoff files.
 - `--validate-only`: validate structured ARS handoff files and exit without publishing (requires `--structured-input-dir`).
 - `--semantic-validate-only`: run ontology-quality semantic validation and exit.
-- `--base-iri`: base IRI for JSON-LD exports (default: `https://example.org/ars/kg/`).
+- `--base-iri`: base IRI for JSON-LD exports (default: `https://neuronautix.github.io/ars-wiki-kg-system/kg/`).
 - `--merge-structured-and-markdown`: merge both sources instead of preferring structured (requires `--structured-input-dir`).
 - `--include-glob` / `--exclude-glob`: markdown extraction file filters.
 - `--publish-mode accepted|draft|all`: publishing status policy.
@@ -221,3 +231,4 @@ python kg_layer/review/hitl_review.py decide --reviews kg_layer/review/reviews.j
 - It can evolve into a separate repository later with minimal changes.
 - Structured ARS HITL items that enter as `accepted` flow through the pipeline unchanged —
   their reviewer identity, timestamp, and notes are preserved in every output artifact.
+- Production contract and release gates are defined in `kg_layer/PRODUCTION_KG_CONTRACT.md`.
