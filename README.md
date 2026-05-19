@@ -388,6 +388,43 @@ git -C vendor/academic-research-skills fetch --tags
 git -C vendor/academic-research-skills checkout v3.7.0
 ```
 
+## Working With Feature Branches and the ARS Submodule
+
+This repository has two Git histories:
+
+| Layer | Path | Example branch |
+|---|---|---|
+| Parent KG system | repo root | `feature/ars-kg-semantic-ontology` |
+| ARS submodule | `vendor/academic-research-skills/` | `feature/ars-kg-semantic-protocol` |
+
+The parent repository stores only a pointer to a specific ARS submodule commit.
+If a feature changes files under `vendor/academic-research-skills/`, that change
+must be committed and pushed in the ARS submodule first. Then commit the updated
+submodule pointer in the parent repo.
+
+Recommended order:
+
+```bash
+# 1. Commit and push ARS changes inside the submodule
+cd vendor/academic-research-skills
+git switch -c feature/ars-kg-semantic-protocol
+git add academic-pipeline academic-paper/agents
+git commit -m "Add ARS KG handoff protocol"
+git push -u origin feature/ars-kg-semantic-protocol
+
+# 2. Commit and push the parent KG system branch
+cd ../..
+git switch -c feature/ars-kg-semantic-ontology
+git add kg_layer README.md vendor/academic-research-skills
+git commit -m "Add semantic ARS KG pipeline integration"
+git push -u origin feature/ars-kg-semantic-ontology
+```
+
+If you cannot push to the upstream ARS repository, push the ARS submodule branch
+to your own fork first, then update the submodule remote or pointer accordingly.
+Do not push the parent branch with a submodule commit that exists only locally;
+other machines will not be able to check it out.
+
 ---
 
 ## Need Help?
