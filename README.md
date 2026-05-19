@@ -178,7 +178,8 @@ python3 kg_layer/pipeline/run_pipeline.py \
 The pipeline:
 - Reads all `*.kg_candidates.json` files from the structured input directory
 - Validates and reviews each item
-- Publishes per-article and global KG outputs
+- Enforces semantic release gates
+- Publishes per-article, global, strict/draft, constraint, and quality outputs
 
 ### Step 5 — Find your results
 
@@ -187,6 +188,10 @@ The pipeline:
 | **Per-article KG JSON** | `kg_layer/data/published/per_article/{article-slug}.kg.json` |
 | **Per-article JSON-LD** | `kg_layer/data/published/per_article/{article-slug}.graph.jsonld` |
 | **Global knowledge graph** | `kg_layer/data/published/graph.jsonld` |
+| **Strict accepted graph** | `kg_layer/data/published/graph.accepted.jsonld` |
+| **Draft graph** | `kg_layer/data/published/graph.draft.jsonld` |
+| **Constraint artifacts** | `kg_layer/data/published/constraints/{accepted,draft,selected}/` |
+| **Quality reports** | `kg_layer/data/published/quality/{run_quality_report.json,quality_trends.json}` |
 | **Wiki pages** | `kg_layer/data/published/wiki/` |
 | Review queue | `kg_layer/data/review_queue/review_queue.json` |
 | Reviewed objects | `kg_layer/data/reviewed/reviewed.json` |
@@ -289,7 +294,7 @@ python kg_layer/pipeline/run_pipeline.py [options]
 | `--structured-input-dir DIR` | Directory of `*.kg_candidates.json` ARS HITL handoff files. Preferred over markdown when files are found; a valid but empty directory falls back to markdown, while missing/non-directory paths fail fast. |
 | `--validate-only` | Validate structured ARS handoff files and exit without publishing. Requires `--structured-input-dir`. |
 | `--semantic-validate-only` | Run ontology-quality semantic validation and exit. Validates `--structured-input-dir` when set, otherwise validates reviewed objects under `--data-root`. |
-| `--base-iri IRI` | Base IRI for JSON-LD exports (default: `https://example.org/ars/kg/`). |
+| `--base-iri IRI` | Base IRI for JSON-LD exports (default: `https://neuronautix.github.io/ars-wiki-kg-system/kg/`). |
 | `--merge-structured-and-markdown` | Combine structured and markdown candidates instead of preferring one source. Requires `--structured-input-dir`. |
 | `--data-root DIR` | Base output directory (default: `kg_layer/data`). |
 | `--reviews FILE` | Review decisions JSON (default: `kg_layer/review/reviews.json`). |
@@ -302,6 +307,15 @@ python kg_layer/pipeline/run_pipeline.py [options]
 | `--carry-forward-accepted` | Preserve accepted status for unchanged source spans (default: on). |
 | `--watch` | Run as a live sidecar and re-run on file changes. |
 | `--poll-seconds N` | Polling interval for `--watch` mode (default: 5). |
+
+---
+
+## Production contract and release gates
+
+The production KG contract (schema versioning, compatibility policy, quality gates,
+constraint artifacts, and ARS fork requirements) is documented in:
+
+- `kg_layer/PRODUCTION_KG_CONTRACT.md`
 
 ---
 

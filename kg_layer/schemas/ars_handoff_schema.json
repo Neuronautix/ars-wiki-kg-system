@@ -4,12 +4,28 @@
   "title": "ARS-to-KG Structured Handoff",
   "description": "Per-article structured handoff from ARS HITL outputs to the KG layer. One file per article/run.",
   "type": "object",
-  "required": ["source_document", "items"],
+  "required": ["schema_version", "contract_version", "source_document", "items"],
   "additionalProperties": false,
   "properties": {
     "article_id": {
       "type": "string",
       "description": "Unique identifier for the article. Used in per-article output filenames. Defaults to the source_document stem if absent."
+    },
+    "schema_version": {
+      "type": "string",
+      "const": "1.1.0",
+      "description": "Schema version for this handoff payload."
+    },
+    "contract_version": {
+      "type": "string",
+      "const": "1.1",
+      "description": "Versioned KG contract expected by downstream embedding and LLM systems."
+    },
+    "compatibility_policy": {
+      "type": "string",
+      "enum": ["strict", "backward_compatible"],
+      "default": "backward_compatible",
+      "description": "Compatibility mode for downstream consumers."
     },
     "title": {
       "type": "string",
@@ -30,9 +46,43 @@
       "items": {
         "$ref": "#/$defs/KGCandidate"
       }
+    },
+    "retrieval_policy": {
+      "type": "object",
+      "description": "Preferred retrieval policy for downstream constraint consumers.",
+      "additionalProperties": false,
+      "properties": {
+        "default_mode": {
+          "type": "string",
+          "enum": ["accepted_only", "draft"]
+        },
+        "allow_needs_revision": {
+          "type": "boolean"
+        }
+      }
     }
   },
   "$defs": {
+    "RelationEdge": {
+      "type": "object",
+      "required": ["target_id", "relation_type"],
+      "additionalProperties": false,
+      "properties": {
+        "target_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "relation_type": {
+          "type": "string",
+          "enum": ["supports", "contradicts", "relates_to_concept", "derived_from", "cites", "same_as"]
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0
+        }
+      }
+    },
     "KGCandidate": {
       "type": "object",
       "description": "A single structured KG candidate from the ARS HITL review loop.",
@@ -139,6 +189,53 @@
         "iri": {
           "type": "string",
           "description": "Optional explicit stable IRI to use in semantic web exports."
+        },
+        "source_span_start": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Inclusive source span start character offset."
+        },
+        "source_span_end": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Exclusive source span end character offset."
+        },
+        "citation_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Structured citation identifiers (DOI/URL/PMID/etc.)."
+        },
+        "claim_polarity": {
+          "type": "string",
+          "enum": ["supports", "contradicts", "neutral", "uncertain"],
+          "description": "Polarity for claim interpretation."
+        },
+        "claim_modality": {
+          "type": "string",
+          "enum": ["asserted", "observed", "inferred", "hypothetical", "negated"],
+          "description": "Claim certainty/modality tag."
+        },
+        "canonical_id": {
+          "type": "string",
+          "description": "Stable canonical ID for normalized concepts/entities."
+        },
+        "ontology_mappings": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "External ontology mappings (IRIs/identifiers)."
+        },
+        "relation_edges": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/RelationEdge"
+          },
+          "description": "Typed relation edges with optional confidence."
         }
       }
     }

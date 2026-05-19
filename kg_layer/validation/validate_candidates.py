@@ -1,5 +1,6 @@
 import argparse
 import json
+import re
 from pathlib import Path
 from typing import Dict, List, Tuple
 
@@ -16,6 +17,7 @@ REQUIRED_FIELDS = [
     "reviewer_notes",
 ]
 ALLOWED_REVIEW_STATUS = {"pending", "in_review", "accepted", "rejected", "needs_revision"}
+ID_RE = re.compile(r"^(paper|concept|claim|evidence):[a-z0-9][a-z0-9-]*:\d+$")
 
 
 def validate_object(obj: Dict, idx: int) -> List[str]:
@@ -41,6 +43,18 @@ def validate_object(obj: Dict, idx: int) -> List[str]:
     for txt in ["id", "source_document", "source_section", "supporting_quote_or_span", "extraction_method"]:
         if txt in obj and not str(obj[txt]).strip():
             errors.append(f"[{idx}] Empty value: {txt}")
+
+    obj_id = str(obj.get("id", "")).strip()
+    if obj_id and not ID_RE.match(obj_id):
+        errors.append(f"[{idx}] id does not follow deterministic policy (<type>:<slug>:<index>): {obj_id}")
+
+    if obj.get("source_span_start") is not None or obj.get("source_span_end") is not None:
+        start = obj.get("source_span_start")
+        end = obj.get("source_span_end")
+        if not isinstance(start, int) or not isinstance(end, int):
+            errors.append(f"[{idx}] source_span_start/source_span_end must both be integers when present")
+        elif start < 0 or end < 0 or end <= start:
+            errors.append(f"[{idx}] Invalid source span offsets: start={start}, end={end}")
 
     return errors
 

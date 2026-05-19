@@ -17,6 +17,9 @@ from kg_layer.extraction.ingest_structured import (  # noqa: E402
 )
 
 RECOMMENDED_SUFFIX = ".kg_candidates.json"
+EXPECTED_SCHEMA_VERSION = "1.1.0"
+EXPECTED_CONTRACT_VERSION = "1.1"
+ALLOWED_COMPATIBILITY_POLICY = {"strict", "backward_compatible"}
 
 
 def discover_handoff_files(path: Path) -> Tuple[List[Path], List[str]]:
@@ -58,6 +61,38 @@ def validate_handoff_file(path: Path) -> Tuple[int, List[str], List[str], List[T
     elif not str(data["source_document"]).strip():
         errors.append(f"{path.name}: top-level source_document must be non-empty")
 
+    if "schema_version" not in data:
+        errors.append(f"{path.name}: missing top-level field: schema_version")
+    elif str(data.get("schema_version")) != EXPECTED_SCHEMA_VERSION:
+        errors.append(
+            f"{path.name}: schema_version must be {EXPECTED_SCHEMA_VERSION} (got {data.get('schema_version')})"
+        )
+
+    if "contract_version" not in data:
+        errors.append(f"{path.name}: missing top-level field: contract_version")
+    elif str(data.get("contract_version")) != EXPECTED_CONTRACT_VERSION:
+        errors.append(
+            f"{path.name}: contract_version must be {EXPECTED_CONTRACT_VERSION} (got {data.get('contract_version')})"
+        )
+
+    compatibility_policy = data.get("compatibility_policy")
+    if compatibility_policy is not None and compatibility_policy not in ALLOWED_COMPATIBILITY_POLICY:
+        errors.append(
+            f"{path.name}: compatibility_policy must be one of {sorted(ALLOWED_COMPATIBILITY_POLICY)}"
+        )
+
+    retrieval_policy = data.get("retrieval_policy")
+    if retrieval_policy is not None:
+        if not isinstance(retrieval_policy, dict):
+            errors.append(f"{path.name}: retrieval_policy must be an object")
+        else:
+            default_mode = retrieval_policy.get("default_mode")
+            if default_mode is not None and default_mode not in {"accepted_only", "draft"}:
+                errors.append(f"{path.name}: retrieval_policy.default_mode must be accepted_only or draft")
+            allow_needs_revision = retrieval_policy.get("allow_needs_revision")
+            if allow_needs_revision is not None and not isinstance(allow_needs_revision, bool):
+                errors.append(f"{path.name}: retrieval_policy.allow_needs_revision must be boolean")
+
     if "items" not in data:
         errors.append(f"{path.name}: missing top-level field: items")
         return 0, errors, warnings, item_ids
@@ -65,7 +100,9 @@ def validate_handoff_file(path: Path) -> Tuple[int, List[str], List[str], List[T
         errors.append(f"{path.name}: top-level items must be a JSON array")
         return 0, errors, warnings, item_ids
 
-    article_metadata: Dict = {k: data[k] for k in ("article_id", "run_id", "title") if k in data}
+    article_metadata: Dict = {
+        k: data[k] for k in ("article_id", "run_id", "title", "contract_version") if k in data
+    }
     seen_in_file = set()
 
     for idx, item in enumerate(data["items"], start=1):

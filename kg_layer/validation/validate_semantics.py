@@ -7,10 +7,13 @@ from typing import Dict, Iterable, List, Set, Tuple
 ALLOWED_REVIEW_STATUS = {"pending", "in_review", "accepted", "rejected", "needs_revision"}
 RECOMMENDED_HANDOFF_SUFFIX = ".kg_candidates.json"
 HTTP_IRI_RE = re.compile(r"^https?://[^\s<>{}|\\^`\[\]\"]+$")
+ID_RE = re.compile(r"^(paper|concept|claim|evidence):[a-z0-9][a-z0-9-]*:\d+$")
+DOI_RE = re.compile(r"^10\.\d{4,9}/[-._;()/:A-Z0-9]+$", re.IGNORECASE)
 EXCEPTION_NOTE_RE = re.compile(
     r"\b(exception|unsupported|no evidence|no related evidence|manual review|not source-backed)\b",
     re.IGNORECASE,
 )
+ALLOWED_RELATION_TYPES = {"supports", "contradicts", "relates_to_concept", "derived_from", "cites", "same_as"}
 
 
 def object_label(obj: Dict, fallback: str) -> str:
@@ -80,6 +83,20 @@ def aliases_indicate_merge(first: Dict, second: Dict) -> bool:
     return bool(first_aliases & second_aliases)
 
 
+def relation_edges(obj: Dict) -> List[Dict]:
+    edges = obj.get("relation_edges")
+    if isinstance(edges, list):
+        return [edge for edge in edges if isinstance(edge, dict)]
+    return []
+
+
+def has_reverse_support(evidence_obj: Dict, claim_id: str) -> bool:
+    for edge in relation_edges(evidence_obj):
+        if edge.get("relation_type") == "supports" and str(edge.get("target_id")) == claim_id:
+            return True
+    return False
+
+
 def validate_items(
     items: List[Dict],
     source_name: str,
@@ -130,8 +147,54 @@ def validate_items(
         if iri is not None and str(iri).strip() and not HTTP_IRI_RE.match(str(iri).strip()):
             errors.append(f"[{source_name}:{idx}] iri must look like an http(s) IRI for {label}: {iri}")
 
+        obj_id = str(obj.get("id") or "").strip()
+        if obj_id and not ID_RE.match(obj_id):
+            errors.append(
+                f"[{source_name}:{idx}] id does not match deterministic policy "
+                f"(<type>:<slug>:<index>) for {label}: {obj_id}"
+            )
+
+        relation_list = obj.get("relation_edges")
+        if relation_list is not None:
+            if not isinstance(relation_list, list):
+                errors.append(f"[{source_name}:{idx}] relation_edges must be an array for {label}")
+            else:
+                for rel_idx, edge in enumerate(relation_list, start=1):
+                    if not isinstance(edge, dict):
+                        errors.append(f"[{source_name}:{idx}] relation_edges[{rel_idx}] must be an object for {label}")
+                        continue
+                    relation_type = str(edge.get("relation_type", "")).strip()
+                    target_id = str(edge.get("target_id", "")).strip()
+                    if relation_type not in ALLOWED_RELATION_TYPES:
+                        errors.append(
+                            f"[{source_name}:{idx}] relation_edges[{rel_idx}] invalid relation_type for {label}: "
+                            f"{relation_type}"
+                        )
+                    if target_id and target_id not in reference_ids:
+                        errors.append(
+                            f"[{source_name}:{idx}] relation_edges[{rel_idx}] target_id missing for {label}: {target_id}"
+                        )
+                    rel_conf = edge.get("confidence")
+                    if rel_conf is not None:
+                        try:
+                            rel_conf_val = float(rel_conf)
+                        except (TypeError, ValueError):
+                            errors.append(
+                                f"[{source_name}:{idx}] relation_edges[{rel_idx}] confidence is not numeric for {label}"
+                            )
+                        else:
+                            if rel_conf_val < 0.0 or rel_conf_val > 1.0:
+                                errors.append(
+                                    f"[{source_name}:{idx}] relation_edges[{rel_idx}] confidence out of range [0,1] "
+                                    f"for {label}"
+                                )
+
     claim_referenced_evidence: Set[str] = set()
     concept_keys: Dict[str, Tuple[int, Dict]] = {}
+    evidence_by_id: Dict[str, Dict] = {
+        str(obj.get("id")): obj for obj in items if obj.get("type") == "Evidence" and obj.get("id")
+    }
+    canonical_id_to_label: Dict[str, str] = {}
 
     for idx, obj in enumerate(items, start=1):
         label = object_label(obj, f"{source_name}:{idx}")
@@ -149,6 +212,12 @@ def validate_items(
 
         if obj_type == "Claim":
             evidence_ids = as_non_empty_list(obj.get("related_evidence_ids"))
+            edge_evidence_ids = [
+                str(edge.get("target_id"))
+                for edge in relation_edges(obj)
+                if edge.get("relation_type") == "supports" and str(edge.get("target_id", "")).strip()
+            ]
+            evidence_ids.extend(edge_evidence_ids)
             claim_referenced_evidence.update(str(evidence_id) for evidence_id in evidence_ids)
             reviewer_notes = str(obj.get("reviewer_notes") or "")
             if obj.get("review_status") == "accepted" and not evidence_ids and not EXCEPTION_NOTE_RE.search(reviewer_notes):
@@ -156,11 +225,32 @@ def validate_items(
                     f"[{source_name}:{idx}] Accepted Claim must link related_evidence_ids "
                     f"or reviewer_notes must explain an exception: {label}"
                 )
-            if obj.get("review_status") == "accepted" and not str(obj.get("source_citation") or "").strip():
-                warnings.append(f"[{source_name}:{idx}] Accepted Claim missing source_citation: {label}")
+            if obj.get("review_status") == "accepted":
+                citation = str(obj.get("source_citation") or "").strip()
+                citation_ids = [str(v).strip() for v in as_non_empty_list(obj.get("citation_ids"))]
+                if not citation and not citation_ids:
+                    errors.append(
+                        f"[{source_name}:{idx}] Accepted Claim must include source_citation or citation_ids: {label}"
+                    )
+                for citation_id in citation_ids:
+                    if not DOI_RE.match(citation_id) and not HTTP_IRI_RE.match(citation_id):
+                        errors.append(
+                            f"[{source_name}:{idx}] citation_id must be DOI or http(s) URL for {label}: {citation_id}"
+                        )
+
+            claim_id = str(obj.get("id") or "")
+            for evidence_id in evidence_ids:
+                evidence_obj = evidence_by_id.get(str(evidence_id))
+                if evidence_obj is None:
+                    continue
+                if relation_edges(evidence_obj) and not has_reverse_support(evidence_obj, claim_id):
+                    warnings.append(
+                        f"[{source_name}:{idx}] Evidence {evidence_id} missing reverse supports edge to claim {claim_id}"
+                    )
 
         if obj_type == "Concept":
             canonical_label = obj.get("canonical_label") or obj.get("label") or obj.get("name")
+            canonical_id = str(obj.get("canonical_id") or "").strip()
             span = obj.get("supporting_quote_or_span")
             if canonical_label and span:
                 key = normalize_key(canonical_label, span)
@@ -173,6 +263,18 @@ def validate_items(
                         )
                 else:
                     concept_keys[key] = (idx, obj)
+            if obj.get("review_status") == "accepted" and not str(canonical_label or "").strip():
+                errors.append(f"[{source_name}:{idx}] Accepted Concept must include canonical_label: {label}")
+            if canonical_id:
+                if canonical_id in canonical_id_to_label:
+                    prev_label = canonical_id_to_label[canonical_id]
+                    current_label = str(canonical_label or "").strip().casefold()
+                    if prev_label and current_label and prev_label != current_label:
+                        errors.append(
+                            f"[{source_name}:{idx}] canonical_id collision with mismatched labels: {canonical_id}"
+                        )
+                else:
+                    canonical_id_to_label[canonical_id] = str(canonical_label or "").strip().casefold()
 
     referenced_evidence_ids = (
         known_claim_evidence_ids if known_claim_evidence_ids is not None else claim_referenced_evidence

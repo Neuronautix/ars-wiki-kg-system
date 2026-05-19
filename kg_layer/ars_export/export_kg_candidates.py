@@ -19,6 +19,8 @@ VERDICT_TO_STATUS = {
     "UNVERIFIABLE": "rejected",
     "UNVERIFIABLE_ACCESS": "in_review",
 }
+SCHEMA_VERSION = "1.1.0"
+CONTRACT_VERSION = "1.1"
 
 
 def slugify(value: str) -> str:
@@ -120,6 +122,7 @@ def build_object(
         "extraction_method": "ars_hitl",
         **reviewed_fields(status, reviewer, reviewed_at, notes),
         "article_id": article_id,
+        "contract_version": CONTRACT_VERSION,
     }
     if run_id:
         obj["run_id"] = run_id
@@ -192,6 +195,13 @@ def claim_objects_from_report(
                 {
                     "related_evidence_ids": [evidence_id],
                     "source_citation": source,
+                    "citation_ids": [source] if source.startswith("http://") or source.startswith("https://") else [],
+                    "claim_polarity": "supports",
+                    "claim_modality": "asserted",
+                    "relation_edges": [
+                        {"target_id": evidence_id, "relation_type": "supports", "confidence": 0.9}
+                    ],
+                    "contract_version": CONTRACT_VERSION,
                 },
             )
         )
@@ -216,6 +226,11 @@ def claim_objects_from_report(
                 run_id,
                 {
                     "source_citation": source,
+                    "citation_ids": [source] if source.startswith("http://") or source.startswith("https://") else [],
+                    "relation_edges": [
+                        {"target_id": claim_id, "relation_type": "supports", "confidence": 0.9}
+                    ],
+                    "contract_version": CONTRACT_VERSION,
                 },
             )
         )
@@ -240,6 +255,7 @@ def objects_from_article_fallback(
         obj["id"] = f"{object_type.lower()}:{article_id}:{counters[object_type]}"
         obj["extraction_method"] = "ars_article_markdown_export"
         obj["article_id"] = article_id
+        obj["contract_version"] = CONTRACT_VERSION
         if run_id:
             obj["run_id"] = run_id
         obj.update(
@@ -338,6 +354,10 @@ def main() -> None:
         items = [paper, *[obj for obj in fallback_items if obj["type"] != "Paper"]]
 
     handoff = {
+        "schema_version": SCHEMA_VERSION,
+        "contract_version": CONTRACT_VERSION,
+        "compatibility_policy": "backward_compatible",
+        "retrieval_policy": {"default_mode": "accepted_only", "allow_needs_revision": True},
         "article_id": article_id,
         "title": title,
         "source_document": source_document,

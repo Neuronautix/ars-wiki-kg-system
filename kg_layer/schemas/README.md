@@ -34,11 +34,19 @@ Defines the per-article `*.kg_candidates.json` handoff file that transfers ARS H
 outputs into the KG pipeline.
 
 Each handoff file contains:
+- Contract metadata (`schema_version`, `contract_version`, `compatibility_policy`).
 - Article-level metadata (`article_id`, `title`, `run_id`, `source_document`).
 - An `items` array of `KGCandidate` objects, each mapping directly to a KG layer object.
 
 `KGCandidate` fields match the `BaseExtractedObject` slots in `knowledge_model.yaml`,
 with full provenance (`reviewer`, `reviewed_at`, `reviewer_notes`, `review_status`).
+The schema also includes richer machine-actionable constraints such as:
+
+- `relation_edges` (typed target links with optional confidence)
+- `citation_ids` (DOI/URL-style IDs)
+- `source_span_start` / `source_span_end`
+- `claim_polarity` / `claim_modality`
+- `canonical_id` / `ontology_mappings`
 
 ### Usage
 
@@ -51,4 +59,3 @@ python kg_layer/pipeline/run_pipeline.py \
 ```
 
 See `kg_layer/data/examples/example_article.kg_candidates.json` for a worked example.
-
