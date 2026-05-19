@@ -106,7 +106,11 @@ def validate_items(
     errors: List[str] = []
     warnings: List[str] = []
     seen_ids: Dict[str, int] = {}
-    ids: Set[str] = set()
+    ids: Set[str] = {
+        str(obj.get("id")).strip()
+        for obj in items
+        if obj.get("id") is not None and str(obj.get("id")).strip()
+    }
 
     reference_ids = known_ids if known_ids is not None else ids
 
@@ -124,7 +128,6 @@ def validate_items(
                 )
             else:
                 seen_ids[obj_id_str] = idx
-                ids.add(obj_id_str)
 
         confidence = obj.get("confidence")
         if confidence is not None:
@@ -263,7 +266,7 @@ def validate_items(
                         )
                 else:
                     concept_keys[key] = (idx, obj)
-            if obj.get("review_status") == "accepted" and not str(canonical_label or "").strip():
+            if obj.get("review_status") == "accepted" and not str((canonical_label or span or "")).strip():
                 errors.append(f"[{source_name}:{idx}] Accepted Concept must include canonical_label: {label}")
             if canonical_id:
                 if canonical_id in canonical_id_to_label:
