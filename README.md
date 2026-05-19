@@ -31,13 +31,14 @@ The knowledge graph captures the concepts, claims, and evidence from the same re
 
 ## Before You Begin
 
-You need **two free tools** installed on your computer:
+For the KG pipeline alone, you need:
 
 1. **Python 3.8 or later** — [Download here](https://www.python.org/downloads/)  
    *(During installation on Windows, tick "Add Python to PATH")*
 2. **Git** — [Download here](https://git-scm.com/downloads)
 
-That's it. No databases, no cloud accounts, no paid software.
+For the full ARS + KG workflow, you also need **Claude Code CLI** and an
+Anthropic API key because ARS runs as Claude Code plugin/skill commands.
 
 ---
 
@@ -47,24 +48,72 @@ The preferred workflow uses structured ARS HITL outputs for the best graph quali
 
 ### Step 1 — Get the code
 
+If you use Claude Code from WSL Ubuntu, clone the repo inside the WSL filesystem
+instead of under `/mnt/c/...`:
+
 ```bash
+cd ~
+mkdir -p projects
+cd projects
 git clone --recurse-submodules https://github.com/Neuronautix/ars-wiki-kg-system.git
 cd ars-wiki-kg-system
 ```
 
-### Step 2 — Produce ARS HITL handoff files
+If you cloned without submodules, initialize them:
+
+```bash
+git submodule update --init --recursive
+```
+
+### Step 2 — Start ARS in Claude Code
+
+Start Claude Code from the repo root:
+
+```bash
+claude
+```
+
+If ARS is installed as the Claude Code plugin, start the full ARS workflow inside
+Claude with:
+
+```text
+/academic-research-skills:ars-full
+```
+
+For a first test, ask for a short Markdown article and a claim verification
+report:
+
+```text
+Create a short complete research article about AI tutors and student learning outcomes.
+Keep the scope small for a test run. Output the final article as Markdown, and also
+produce a Claim Verification Report if available.
+```
+
+Save the final article as a Markdown file, for example:
+
+```text
+kg_layer/data/raw/ai_tutors_article.md
+```
+
+If Claude produced a Claim Verification Report, save it too, for example:
+
+```text
+kg_layer/data/raw/ai_tutors_claim_verification_report.md
+```
+
+### Step 3 — Produce ARS HITL handoff files
 
 After a research run, export structured KG candidates from the final ARS article
 and, when available, the ARS Claim Verification Report:
 
 ```bash
 python3 kg_layer/ars_export/export_kg_candidates.py \
-  --article /path/to/ars/article.md \
-  --claim-verification-report /path/to/ars/claim_verification_report.md \
-  --output-dir /path/to/ars/hitl/outputs \
-  --article-id my-article-2026 \
-  --run-id ars-run-2026-05-17-001 \
-  --reviewer alice
+  --article kg_layer/data/raw/ai_tutors_article.md \
+  --claim-verification-report kg_layer/data/raw/ai_tutors_claim_verification_report.md \
+  --output-dir kg_layer/data/ars_handoff \
+  --article-id ai-tutors-test \
+  --run-id ars-test-001 \
+  --reviewer "Your Name"
 ```
 
 The exporter writes one `*.kg_candidates.json` file into the output directory.
@@ -102,11 +151,11 @@ Each handoff file covers one article and looks like this (abbreviated):
 }
 ```
 
-### Step 3 — Run the pipeline with structured input
+### Step 4 — Run the pipeline with structured input
 
 ```bash
-python kg_layer/pipeline/run_pipeline.py \
-  --structured-input-dir /path/to/ars/hitl/outputs
+python3 kg_layer/pipeline/run_pipeline.py \
+  --structured-input-dir kg_layer/data/ars_handoff
 ```
 
 The pipeline:
@@ -114,7 +163,7 @@ The pipeline:
 - Validates and reviews each item
 - Publishes per-article and global KG outputs
 
-### Step 4 — Find your results
+### Step 5 — Find your results
 
 | Output | Location |
 |---|---|
