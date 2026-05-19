@@ -211,12 +211,12 @@ def to_jsonld_node(obj: Dict, iri_by_id: Dict[str, str], base_iri: str) -> Dict:
     evidence_links = linked_ids(obj.get("related_evidence_ids", []), iri_by_id, base_iri)
     if obj.get("type") == "Claim":
         evidence_links.extend(relation_links(obj, "supports", iri_by_id, base_iri))
-    dedup_evidence = {}
-    for link in evidence_links:
-        dedup_evidence[link["@id"]] = link
-    evidence_links = list(dedup_evidence.values())
-    if evidence_links and obj.get("type") == "Claim":
-        node["supportedBy"] = evidence_links
+        dedup_evidence = {}
+        for link in evidence_links:
+            dedup_evidence[link["@id"]] = link
+        evidence_links = list(dedup_evidence.values())
+        if evidence_links:
+            node["supportedBy"] = evidence_links
 
     concept_links = linked_ids(obj.get("related_concept_ids", []), iri_by_id, base_iri)
     concept_links.extend(relation_links(obj, "relates_to_concept", iri_by_id, base_iri))
