@@ -1,1 +1,9 @@
-[]
+[
+  {
+    "object_id": "concept:constraint-is-not-a-limitation:1",
+    "review_status": "rejected",
+    "reviewer": "Damien",
+    "reviewed_at": "2026-05-20T09:29:41Z",
+    "reviewer_notes": "Author-name fragment, not a KG concept."
+  }
+]

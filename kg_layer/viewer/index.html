@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>ARS KG Constraint Viewer</title>
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <aside class="sidebar" aria-label="Graph controls">
+        <header class="panel-header">
+          <h1>KG Constraints</h1>
+          <p id="loadStatus">Loading dataset...</p>
+        </header>
+
+        <section class="control-block">
+          <label for="datasetSelect">Dataset</label>
+          <select id="datasetSelect">
+            <option value="selected">selected</option>
+            <option value="accepted">accepted</option>
+            <option value="draft">draft</option>
+          </select>
+        </section>
+
+        <section class="control-block">
+          <label for="searchInput">Search</label>
+          <input id="searchInput" type="search" placeholder="id, label, document, citation">
+        </section>
+
+        <section class="control-block">
+          <div class="section-label">Type</div>
+          <div id="typeFilters" class="filter-grid"></div>
+        </section>
+
+        <section class="control-block">
+          <div class="section-label">Status</div>
+          <div id="statusFilters" class="filter-grid"></div>
+        </section>
+
+        <section class="metrics" aria-label="Quality counters">
+          <div><span id="nodeCount">0</span><label>nodes</label></div>
+          <div><span id="edgeCount">0</span><label>edges</label></div>
+          <div><span id="visibleCount">0</span><label>visible</label></div>
+          <div><span id="avgConfidence">-</span><label>avg conf</label></div>
+        </section>
+
+        <section class="legend" aria-label="Node type legend">
+          <div><i class="swatch paper"></i>Paper</div>
+          <div><i class="swatch concept"></i>Concept</div>
+          <div><i class="swatch claim"></i>Claim</div>
+          <div><i class="swatch evidence"></i>Evidence</div>
+        </section>
+      </aside>
+
+      <section class="workspace">
+        <div class="graph-toolbar">
+          <button id="fitButton" type="button">Fit</button>
+          <button id="resetButton" type="button">Reset Filters</button>
+          <span id="graphHint">Drag nodes. Click a node or edge for details.</span>
+        </div>
+        <svg id="graph" role="img" aria-label="Knowledge graph visualization">
+          <defs>
+            <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z"></path>
+            </marker>
+          </defs>
+          <g id="viewport">
+            <g id="edges"></g>
+            <g id="edgeLabels"></g>
+            <g id="nodes"></g>
+          </g>
+        </svg>
+        <div id="emptyState" class="empty-state" hidden>No graph data available for the current filters.</div>
+      </section>
+
+      <aside class="details" aria-label="Selection details">
+        <header class="panel-header">
+          <h2>Details</h2>
+          <p id="selectionSummary">No selection</p>
+        </header>
+        <div id="detailsBody" class="details-body">
+          <p class="muted">Select a node or edge to inspect provenance and review metadata.</p>
+        </div>
+      </aside>
+    </main>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
