@@ -23,6 +23,7 @@ jobs:
           - semantics
           - pipeline
           - artifacts
+          - ars-contract
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -65,3 +66,18 @@ jobs:
           python3 -m json.tool /tmp/kg_ci_data/published/graph.jsonld > /dev/null
           python3 -m json.tool /tmp/kg_ci_data/published/graph.accepted.jsonld > /dev/null
           python3 -m json.tool /tmp/kg_ci_data/published/graph.draft.jsonld > /dev/null
+
+      - name: Validate ARS v1 handoff compatibility
+        if: matrix.check == 'ars-contract'
+        run: |
+          mkdir -p /tmp/ars_kg_handoff
+          cp vendor/academic-research-skills/tests/fixtures/kg_contract/good_kg_handoff.json \
+            /tmp/ars_kg_handoff/article-123.kg_candidates.json
+          python3 vendor/academic-research-skills/scripts/check_kg_handoff.py \
+            /tmp/ars_kg_handoff/article-123.kg_candidates.json
+          python3 vendor/academic-research-skills/scripts/check_claim_verification_report.py \
+            vendor/academic-research-skills/tests/fixtures/kg_contract/good_claim_verification_report.json
+          python3 kg_layer/pipeline/run_pipeline.py \
+            --structured-input-dir /tmp/ars_kg_handoff \
+            --data-root /tmp/ars_kg_ci_data \
+            --skip-review-apply

@@ -1,8 +1,15 @@
 import argparse
 import json
 import re
+import sys
 from pathlib import Path
 from typing import Dict, List, Tuple
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from kg_layer.extraction.ars_handoff_adapter import adapt_handoff
 
 REQUIRED_ITEM_FIELDS = [
     "id",
@@ -17,7 +24,7 @@ REQUIRED_ITEM_FIELDS = [
 ALLOWED_TYPES = {"Paper", "Concept", "Claim", "Evidence"}
 ALLOWED_REVIEW_STATUS = {"pending", "in_review", "accepted", "rejected", "needs_revision"}
 ALLOWED_RELATION_TYPES = {"supports", "contradicts", "relates_to_concept", "derived_from", "cites", "same_as"}
-ID_RE = re.compile(r"^(paper|concept|claim|evidence):[a-z0-9][a-z0-9-]*:\d+$")
+ID_RE = re.compile(r"^(paper|concept|claim|evidence):.+:.+$")
 DOI_RE = re.compile(r"^10\.\d{4,9}/[-._;()/:A-Z0-9]+$", re.IGNORECASE)
 URL_RE = re.compile(r"^https?://[^\s<>{}|\\^`\[\]\"]+$")
 
@@ -73,7 +80,7 @@ def validate_item(item: Dict, source_file: str, idx: int) -> List[str]:
 
     item_id = str(item.get("id", "")).strip()
     if item_id and not ID_RE.match(item_id):
-        errors.append(f"[{source_file}:{idx}] id does not follow deterministic policy (<type>:<slug>:<index>): {item_id}")
+        errors.append(f"[{source_file}:{idx}] id does not follow policy (<type>:<namespace>:<local-id>): {item_id}")
 
     if item.get("source_span_start") is not None or item.get("source_span_end") is not None:
         start = item.get("source_span_start")
@@ -131,6 +138,7 @@ def ingest_file(path: Path) -> List[Dict]:
     if not isinstance(data, dict):
         raise ValueError(f"Handoff file must be a JSON object: {path}")
 
+    data = adapt_handoff(data)
     items = data.get("items", [])
     if not isinstance(items, list):
         raise ValueError(f"'items' must be a JSON array in: {path}")

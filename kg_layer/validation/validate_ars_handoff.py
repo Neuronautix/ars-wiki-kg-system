@@ -15,11 +15,28 @@ from kg_layer.extraction.ingest_structured import (  # noqa: E402
     normalize_item,
     validate_item,
 )
+from kg_layer.extraction.ars_handoff_adapter import (  # noqa: E402
+    ARS_SCHEMA_VERSION,
+    SUPPORTED_SCHEMA_VERSIONS,
+    adapt_handoff,
+)
 
 RECOMMENDED_SUFFIX = ".kg_candidates.json"
-EXPECTED_SCHEMA_VERSION = "1.1.0"
 EXPECTED_CONTRACT_VERSION = "1.1"
 ALLOWED_COMPATIBILITY_POLICY = {"strict", "backward_compatible"}
+ARS_REQUIRED_ITEM_FIELDS = {
+    "source_anchor",
+    "source_citation_id",
+    "confidence_rationale",
+    "review_decision",
+}
+ARS_ALLOWED_LINK_RELATION_TYPES = {
+    "claim_supported_by_evidence",
+    "claim_contradicted_by_evidence",
+    "claim_about_concept",
+    "evidence_about_concept",
+}
+ARS_ALLOWED_LINK_POLARITIES = {"support", "contradiction", "neutral"}
 
 
 def discover_handoff_files(path: Path) -> Tuple[List[Path], List[str]]:
@@ -61,19 +78,31 @@ def validate_handoff_file(path: Path) -> Tuple[int, List[str], List[str], List[T
     elif not str(data["source_document"]).strip():
         errors.append(f"{path.name}: top-level source_document must be non-empty")
 
+    schema_version = str(data.get("schema_version", ""))
     if "schema_version" not in data:
         errors.append(f"{path.name}: missing top-level field: schema_version")
-    elif str(data.get("schema_version")) != EXPECTED_SCHEMA_VERSION:
+    elif schema_version not in SUPPORTED_SCHEMA_VERSIONS:
         errors.append(
-            f"{path.name}: schema_version must be {EXPECTED_SCHEMA_VERSION} (got {data.get('schema_version')})"
+            f"{path.name}: schema_version must be one of {sorted(SUPPORTED_SCHEMA_VERSIONS)} "
+            f"(got {data.get('schema_version')})"
         )
 
-    if "contract_version" not in data:
+    is_ars_100 = schema_version == ARS_SCHEMA_VERSION
+    if not is_ars_100 and "contract_version" not in data:
         errors.append(f"{path.name}: missing top-level field: contract_version")
-    elif str(data.get("contract_version")) != EXPECTED_CONTRACT_VERSION:
+    elif "contract_version" in data and str(data.get("contract_version")) != EXPECTED_CONTRACT_VERSION:
         errors.append(
             f"{path.name}: contract_version must be {EXPECTED_CONTRACT_VERSION} (got {data.get('contract_version')})"
         )
+
+    if is_ars_100:
+        for field in ("article_id", "title", "run_id", "run_metadata", "links"):
+            if field not in data:
+                errors.append(f"{path.name}: missing ARS 1.0.0 top-level field: {field}")
+        if "run_metadata" in data and not isinstance(data["run_metadata"], dict):
+            errors.append(f"{path.name}: run_metadata must be an object")
+        if "links" in data and not isinstance(data["links"], list):
+            errors.append(f"{path.name}: top-level links must be a JSON array")
 
     compatibility_policy = data.get("compatibility_policy")
     if compatibility_policy is not None and compatibility_policy not in ALLOWED_COMPATIBILITY_POLICY:
@@ -100,12 +129,13 @@ def validate_handoff_file(path: Path) -> Tuple[int, List[str], List[str], List[T
         errors.append(f"{path.name}: top-level items must be a JSON array")
         return 0, errors, warnings, item_ids
 
+    adapted_data = adapt_handoff(data)
     article_metadata: Dict = {
-        k: data[k] for k in ("article_id", "run_id", "title", "contract_version") if k in data
+        k: adapted_data[k] for k in ("article_id", "run_id", "title", "contract_version") if k in adapted_data
     }
     seen_in_file = set()
 
-    for idx, item in enumerate(data["items"], start=1):
+    for idx, item in enumerate(adapted_data["items"], start=1):
         if not isinstance(item, dict):
             errors.append(f"[{path.name}:{idx}] Item must be a JSON object")
             continue
@@ -121,6 +151,21 @@ def validate_handoff_file(path: Path) -> Tuple[int, List[str], List[str], List[T
             if field in normalized and normalized[field] is None:
                 errors.append(f"[{path.name}:{idx}] Null value for required field: {field}")
 
+        if is_ars_100:
+            for field in ARS_REQUIRED_ITEM_FIELDS:
+                if field not in item:
+                    errors.append(f"[{path.name}:{idx}] Missing ARS 1.0.0 required field: {field}")
+                elif item[field] is None or (isinstance(item[field], str) and not item[field].strip()):
+                    errors.append(f"[{path.name}:{idx}] Empty ARS 1.0.0 required field: {field}")
+            review_decision = item.get("review_decision")
+            if review_decision is not None:
+                if not isinstance(review_decision, dict):
+                    errors.append(f"[{path.name}:{idx}] review_decision must be an object")
+                else:
+                    for field in ("decision_by", "decision_at", "rationale"):
+                        if not str(review_decision.get(field, "")).strip():
+                            errors.append(f"[{path.name}:{idx}] review_decision missing or empty field: {field}")
+
         if isinstance(normalized.get("confidence"), bool):
             errors.append(f"[{path.name}:{idx}] confidence is not numeric")
 
@@ -133,7 +178,52 @@ def validate_handoff_file(path: Path) -> Tuple[int, List[str], List[str], List[T
         if item_id is not None:
             item_ids.append((str(item_id), idx, path.name))
 
+    if is_ars_100 and isinstance(data.get("links"), list):
+        validate_ars_links(data["links"], {item_id for item_id, _, _ in item_ids}, path.name, errors)
+
     return len(data["items"]), errors, warnings, item_ids
+
+
+def validate_ars_links(links: List, item_ids: set, source_name: str, errors: List[str]) -> None:
+    seen_link_ids = set()
+    for idx, link in enumerate(links, start=1):
+        if not isinstance(link, dict):
+            errors.append(f"[{source_name}:links:{idx}] Link must be a JSON object")
+            continue
+
+        link_id = str(link.get("id", "")).strip()
+        if not link_id:
+            errors.append(f"[{source_name}:links:{idx}] Missing required field: id")
+        elif link_id in seen_link_ids:
+            errors.append(f"[{source_name}:links:{idx}] Duplicate link id within file: {link_id}")
+        else:
+            seen_link_ids.add(link_id)
+
+        from_id = str(link.get("from_id", "")).strip()
+        to_id = str(link.get("to_id", "")).strip()
+        relation_type = str(link.get("relation_type", "")).strip()
+        polarity = str(link.get("polarity", "")).strip()
+
+        if from_id not in item_ids:
+            errors.append(f"[{source_name}:links:{idx}] from_id does not reference an item id: {from_id}")
+        if to_id not in item_ids:
+            errors.append(f"[{source_name}:links:{idx}] to_id does not reference an item id: {to_id}")
+        if relation_type not in ARS_ALLOWED_LINK_RELATION_TYPES:
+            errors.append(f"[{source_name}:links:{idx}] invalid relation_type: {relation_type}")
+        if polarity not in ARS_ALLOWED_LINK_POLARITIES:
+            errors.append(f"[{source_name}:links:{idx}] invalid polarity: {polarity}")
+
+        if link.get("confidence") is not None:
+            try:
+                confidence = float(link["confidence"])
+            except Exception:
+                errors.append(f"[{source_name}:links:{idx}] confidence is not numeric")
+            else:
+                if confidence < 0.0 or confidence > 1.0:
+                    errors.append(f"[{source_name}:links:{idx}] confidence out of range [0,1]: {confidence}")
+
+        if not str(link.get("rationale", "")).strip():
+            errors.append(f"[{source_name}:links:{idx}] Missing required field: rationale")
 
 
 def validate_path(path: Path) -> Tuple[int, int, List[str], List[str]]:

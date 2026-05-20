@@ -17,7 +17,7 @@ REQUIRED_FIELDS = [
     "reviewer_notes",
 ]
 ALLOWED_REVIEW_STATUS = {"pending", "in_review", "accepted", "rejected", "needs_revision"}
-ID_RE = re.compile(r"^(paper|concept|claim|evidence):[a-z0-9][a-z0-9-]*:\d+$")
+ID_RE = re.compile(r"^(paper|concept|claim|evidence):.+:.+$")
 
 
 def validate_object(obj: Dict, idx: int) -> List[str]:
@@ -46,7 +46,7 @@ def validate_object(obj: Dict, idx: int) -> List[str]:
 
     obj_id = str(obj.get("id", "")).strip()
     if obj_id and not ID_RE.match(obj_id):
-        errors.append(f"[{idx}] id does not follow deterministic policy (<type>:<slug>:<index>): {obj_id}")
+        errors.append(f"[{idx}] id does not follow deterministic policy (<type>:<article-id>:<stable-key>): {obj_id}")
 
     if obj.get("source_span_start") is not None or obj.get("source_span_end") is not None:
         start = obj.get("source_span_start")

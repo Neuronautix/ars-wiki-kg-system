@@ -4,7 +4,7 @@ import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
@@ -21,6 +21,7 @@ VERDICT_TO_STATUS = {
 }
 SCHEMA_VERSION = "1.1.0"
 CONTRACT_VERSION = "1.1"
+ARS_V1_SCHEMA_VERSION = "1.0.0"
 
 
 def slugify(value: str) -> str:
@@ -70,7 +71,87 @@ def citation_ids_from_source(value: str) -> List[str]:
     return []
 
 
+def valid_citation_ids(values: List[str]) -> List[str]:
+    return [
+        value
+        for value in values
+        if value.startswith("http://") or value.startswith("https://") or re.match(r"^10\.\d{4,9}/", value)
+    ]
+
+
+def first_nonempty(values: List[Any], default: str = "") -> str:
+    for value in values:
+        if value not in (None, "", []):
+            return str(value).strip()
+    return default
+
+
+def evidence_id_for_claim(claim_id: str, article_id: str, idx: int) -> str:
+    if claim_id.startswith("claim:"):
+        return f"evidence:{claim_id[len('claim:'):]}"
+    return f"evidence:{article_id}:{idx}"
+
+
+def is_claim_verification_json(path: Path) -> bool:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return False
+    return isinstance(data, dict) and isinstance(data.get("claims"), list)
+
+
+def parse_claim_verification_json(path: Path) -> List[Dict[str, Any]]:
+    data = json.loads(path.read_text(encoding="utf-8"))
+    claims = data.get("claims", [])
+    if not isinstance(claims, list):
+        return []
+
+    rows: List[Dict[str, Any]] = []
+    for idx, claim in enumerate(claims, start=1):
+        if not isinstance(claim, dict):
+            continue
+        review_update = claim.get("kg_review_update") or {}
+        if not isinstance(review_update, dict):
+            review_update = {}
+        cited_source_ids = claim.get("cited_source_ids") or []
+        if isinstance(cited_source_ids, str):
+            cited_source_ids = [cited_source_ids]
+        cited_source_ids = [str(source_id).strip() for source_id in cited_source_ids if str(source_id).strip()]
+        concept_links = claim.get("concept_links") or []
+        if not isinstance(concept_links, list):
+            concept_links = []
+        related_concept_ids = [
+            str(link.get("concept_id")).strip()
+            for link in concept_links
+            if isinstance(link, dict) and str(link.get("concept_id", "")).strip()
+        ]
+
+        rows.append(
+            {
+                "claim": str(claim.get("claim_text", "")).strip(),
+                "claim_id": str(claim.get("claim_id", "")).strip(),
+                "section": str(claim.get("section", "")).strip(),
+                "source_anchor": str(claim.get("source_anchor", "")).strip(),
+                "cited_source_ids": cited_source_ids,
+                "source_citation_id": cited_source_ids[0] if cited_source_ids else "",
+                "source": ", ".join(cited_source_ids),
+                "verdict": str(claim.get("verdict", "")).strip(),
+                "confidence": claim.get("confidence"),
+                "detail": str(claim.get("rationale", "")).strip(),
+                "rationale": str(claim.get("rationale", "")).strip(),
+                "kg_new_status": str(review_update.get("new_status", "")).strip(),
+                "reviewer_notes": str(review_update.get("reviewer_notes", "")).strip(),
+                "related_concept_ids": related_concept_ids,
+                "claim_registry_row": claim.get("claim_registry_row", idx),
+            }
+        )
+    return rows
+
+
 def parse_claim_verification_report(path: Path) -> List[Dict[str, str]]:
+    if is_claim_verification_json(path):
+        return parse_claim_verification_json(path)
+
     rows: List[Dict[str, str]] = []
     header: Optional[List[str]] = None
 
@@ -173,17 +254,30 @@ def claim_objects_from_report(
 
     for idx, row in enumerate(rows, start=1):
         verdict = row.get("verdict", "").strip().upper()
-        status = VERDICT_TO_STATUS.get(verdict, "in_review")
+        status = row.get("kg_new_status") or VERDICT_TO_STATUS.get(verdict, "in_review")
         claim = row.get("claim", "").strip()
         section = row.get("section", "").strip() or "Document"
         source = row.get("source", "").strip()
+        source_anchor = row.get("source_anchor", "").strip() or section
+        cited_source_ids = row.get("cited_source_ids") or citation_ids_from_source(source)
+        if isinstance(cited_source_ids, str):
+            cited_source_ids = [cited_source_ids]
+        cited_source_ids = [str(source_id).strip() for source_id in cited_source_ids if str(source_id).strip()]
+        source_citation_id = row.get("source_citation_id", "").strip() or first_nonempty(cited_source_ids, source or source_document)
         detail = row.get("detail", "").strip()
         notes = f"ARS claim verification verdict: {verdict or 'UNKNOWN'}"
         if detail:
             notes = f"{notes}. {detail}"
+        reviewer_notes = row.get("reviewer_notes", "").strip()
+        if reviewer_notes:
+            notes = f"{notes}. Reviewer notes: {reviewer_notes}"
+        confidence = row.get("confidence")
+        if not isinstance(confidence, (int, float)) or isinstance(confidence, bool):
+            confidence = 0.95 if status == "accepted" else 0.75
 
-        claim_id = f"claim:{article_id}:{idx}"
-        evidence_id = f"evidence:{article_id}:{idx}"
+        claim_id = row.get("claim_id", "").strip() or f"claim:{article_id}:{idx}"
+        evidence_id = evidence_id_for_claim(claim_id, article_id, idx)
+        related_concept_ids = row.get("related_concept_ids") or []
 
         objects.append(
             build_object(
@@ -192,7 +286,7 @@ def claim_objects_from_report(
                 source_document,
                 section,
                 claim,
-                0.95 if status == "accepted" else 0.75,
+                float(confidence),
                 status,
                 reviewer,
                 reviewed_at,
@@ -201,8 +295,18 @@ def claim_objects_from_report(
                 run_id,
                 {
                     "related_evidence_ids": [evidence_id],
+                    "related_concept_ids": related_concept_ids,
                     "source_citation": source,
-                    "citation_ids": citation_ids_from_source(source),
+                    "citation_ids": valid_citation_ids(cited_source_ids),
+                    "cited_source_ids": cited_source_ids,
+                    "source_anchor": source_anchor,
+                    "source_citation_id": source_citation_id,
+                    "confidence_rationale": detail or f"Mapped from ARS claim verification verdict {verdict or 'UNKNOWN'}.",
+                    "review_decision": {
+                        "decision_by": reviewer,
+                        "decision_at": reviewed_at,
+                        "rationale": reviewer_notes or detail or notes,
+                    },
                     "claim_polarity": "supports",
                     "claim_modality": "asserted",
                     "relation_edges": [
@@ -217,6 +321,8 @@ def claim_objects_from_report(
         evidence_notes = f"Evidence row for claim {idx}"
         if source:
             evidence_notes = f"{evidence_notes}; source: {source}"
+        if reviewer_notes:
+            evidence_notes = f"{evidence_notes}; reviewer notes: {reviewer_notes}"
         objects.append(
             build_object(
                 "Evidence",
@@ -224,7 +330,7 @@ def claim_objects_from_report(
                 source_document,
                 section,
                 evidence_span,
-                0.9 if status == "accepted" else 0.7,
+                min(float(confidence), 0.9) if status == "accepted" else min(float(confidence), 0.7),
                 status,
                 reviewer,
                 reviewed_at,
@@ -233,7 +339,16 @@ def claim_objects_from_report(
                 run_id,
                 {
                     "source_citation": source,
-                    "citation_ids": citation_ids_from_source(source),
+                    "citation_ids": valid_citation_ids(cited_source_ids),
+                    "cited_source_ids": cited_source_ids,
+                    "source_anchor": source_anchor,
+                    "source_citation_id": source_citation_id,
+                    "confidence_rationale": detail or "Evidence item generated from ARS claim verification source ids.",
+                    "review_decision": {
+                        "decision_by": reviewer,
+                        "decision_at": reviewed_at,
+                        "rationale": reviewer_notes or detail or evidence_notes,
+                    },
                     "relation_edges": [
                         {"target_id": claim_id, "relation_type": "supports", "confidence": 0.9}
                     ],
@@ -243,6 +358,140 @@ def claim_objects_from_report(
         )
 
     return objects
+
+
+def ars_v1_item(item: Dict, reviewer: str, reviewed_at: str) -> Dict:
+    source_citation_id = first_nonempty(
+        [
+            item.get("source_citation_id"),
+            (item.get("citation_ids") or [""])[0] if isinstance(item.get("citation_ids"), list) else "",
+            item.get("source_citation"),
+            item.get("source_document"),
+        ],
+        "source:unspecified",
+    )
+    source_anchor = first_nonempty(
+        [item.get("source_anchor"), item.get("source_section"), item.get("supporting_quote_or_span")],
+        "Document",
+    )
+    rationale = first_nonempty(
+        [item.get("confidence_rationale"), item.get("reviewer_notes"), "Exported from ARS KG exporter."],
+        "Exported from ARS KG exporter.",
+    )
+    review_decision = item.get("review_decision")
+    if not isinstance(review_decision, dict):
+        review_decision = {
+            "decision_by": item.get("reviewer") or reviewer,
+            "decision_at": item.get("reviewed_at") or reviewed_at,
+            "rationale": item.get("reviewer_notes") or rationale,
+        }
+
+    result = {
+        "id": item["id"],
+        "type": item["type"],
+        "source_document": item.get("source_document") or "unknown",
+        "source_section": item.get("source_section") or "Document",
+        "source_anchor": source_anchor,
+        "supporting_quote_or_span": item.get("supporting_quote_or_span") or source_anchor,
+        "source_citation_id": source_citation_id,
+        "confidence": item.get("confidence", 0.0),
+        "confidence_rationale": rationale,
+        "extraction_method": item.get("extraction_method") or "ars_hitl",
+        "review_status": item.get("review_status") or "pending",
+        "review_decision": {
+            "decision_by": first_nonempty([review_decision.get("decision_by"), reviewer], reviewer),
+            "decision_at": first_nonempty([review_decision.get("decision_at"), reviewed_at], reviewed_at),
+            "rationale": first_nonempty([review_decision.get("rationale"), rationale], rationale),
+        },
+    }
+    for optional_field in ("source_citation", "reviewer_notes", "iri"):
+        if item.get(optional_field):
+            result[optional_field] = item[optional_field]
+    if item["type"] == "Concept":
+        result["canonical_label"] = item.get("canonical_label") or item.get("supporting_quote_or_span") or item["id"]
+        result["aliases"] = item.get("aliases") or []
+    if item["type"] == "Claim":
+        result["related_evidence_ids"] = item.get("related_evidence_ids") or []
+        result["related_concept_ids"] = item.get("related_concept_ids") or []
+    return result
+
+
+def ars_v1_links(items: List[Dict]) -> List[Dict]:
+    ids = {item.get("id") for item in items}
+    links: List[Dict] = []
+    link_idx = 1
+    for item in items:
+        if item.get("type") != "Claim":
+            continue
+        for evidence_id in item.get("related_evidence_ids", []):
+            if evidence_id in ids:
+                links.append(
+                    {
+                        "id": f"link-{link_idx:03d}",
+                        "from_id": item["id"],
+                        "to_id": evidence_id,
+                        "relation_type": "claim_supported_by_evidence",
+                        "polarity": "support",
+                        "confidence": min(float(item.get("confidence", 0.9)), 0.9),
+                        "rationale": item.get("confidence_rationale")
+                        or item.get("reviewer_notes")
+                        or "Claim linked to evidence from ARS verification.",
+                    }
+                )
+                link_idx += 1
+        for concept_id in item.get("related_concept_ids", []):
+            if concept_id in ids:
+                links.append(
+                    {
+                        "id": f"link-{link_idx:03d}",
+                        "from_id": item["id"],
+                        "to_id": concept_id,
+                        "relation_type": "claim_about_concept",
+                        "polarity": "support",
+                        "confidence": min(float(item.get("confidence", 0.9)), 0.9),
+                        "rationale": item.get("confidence_rationale")
+                        or item.get("reviewer_notes")
+                        or "Claim linked to concept from ARS verification.",
+                    }
+                )
+                link_idx += 1
+    return links
+
+
+def build_ars_v1_handoff(
+    article_id: str,
+    title: str,
+    source_document: str,
+    run_id: Optional[str],
+    items: List[Dict],
+    reviewer: str,
+    reviewed_at: str,
+    pipeline_stage: str,
+    ars_version: str,
+    generator_agent: str,
+) -> Dict:
+    v1_items = [ars_v1_item(item, reviewer, reviewed_at) for item in items]
+    v1_item_ids = {item["id"] for item in v1_items}
+    for item in v1_items:
+        if item.get("type") == "Claim":
+            item["related_concept_ids"] = [
+                concept_id for concept_id in item.get("related_concept_ids", []) if concept_id in v1_item_ids
+            ]
+    return {
+        "schema_version": ARS_V1_SCHEMA_VERSION,
+        "article_id": article_id,
+        "title": title,
+        "run_id": run_id or f"run:{article_id}",
+        "source_document": source_document,
+        "run_metadata": {
+            "pipeline_stage": pipeline_stage,
+            "ars_version": ars_version,
+            "generated_at": reviewed_at,
+            "generator_agent": generator_agent,
+        },
+        "items": v1_items,
+        "links": ars_v1_links(v1_items),
+    }
 
 
 def objects_from_article_fallback(
@@ -300,6 +549,24 @@ def main() -> None:
         default="accepted",
         choices=["pending", "in_review", "accepted", "rejected", "needs_revision"],
         help="Review status for article-only fallback extraction.",
+    )
+    parser.add_argument(
+        "--handoff-schema",
+        default="kg_layer",
+        choices=["kg_layer", "ars_v1"],
+        help="Output handoff schema. Defaults to the existing kg_layer 1.1.0 format.",
+    )
+    parser.add_argument(
+        "--pipeline-stage",
+        default="2.5",
+        choices=["2", "2.5", "4", "4.5", "5"],
+        help="ARS v1 run_metadata.pipeline_stage.",
+    )
+    parser.add_argument("--ars-version", default="unknown", help="ARS v1 run_metadata.ars_version.")
+    parser.add_argument(
+        "--generator-agent",
+        default="integrity_verification_agent",
+        help="ARS v1 run_metadata.generator_agent.",
     )
     args = parser.parse_args()
 
@@ -360,18 +627,32 @@ def main() -> None:
         )
         items = [paper, *[obj for obj in fallback_items if obj["type"] != "Paper"]]
 
-    handoff = {
-        "schema_version": SCHEMA_VERSION,
-        "contract_version": CONTRACT_VERSION,
-        "compatibility_policy": "backward_compatible",
-        "retrieval_policy": {"default_mode": "accepted_only", "allow_needs_revision": True},
-        "article_id": article_id,
-        "title": title,
-        "source_document": source_document,
-        "items": items,
-    }
-    if args.run_id:
-        handoff["run_id"] = args.run_id
+    if args.handoff_schema == "ars_v1":
+        handoff = build_ars_v1_handoff(
+            article_id,
+            title,
+            source_document,
+            args.run_id,
+            items,
+            args.reviewer,
+            args.reviewed_at,
+            args.pipeline_stage,
+            args.ars_version,
+            args.generator_agent,
+        )
+    else:
+        handoff = {
+            "schema_version": SCHEMA_VERSION,
+            "contract_version": CONTRACT_VERSION,
+            "compatibility_policy": "backward_compatible",
+            "retrieval_policy": {"default_mode": "accepted_only", "allow_needs_revision": True},
+            "article_id": article_id,
+            "title": title,
+            "source_document": source_document,
+            "items": items,
+        }
+        if args.run_id:
+            handoff["run_id"] = args.run_id
 
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)

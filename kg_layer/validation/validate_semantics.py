@@ -7,7 +7,7 @@ from typing import Dict, Iterable, List, Set, Tuple
 ALLOWED_REVIEW_STATUS = {"pending", "in_review", "accepted", "rejected", "needs_revision"}
 RECOMMENDED_HANDOFF_SUFFIX = ".kg_candidates.json"
 HTTP_IRI_RE = re.compile(r"^https?://[^\s<>{}|\\^`\[\]\"]+$")
-ID_RE = re.compile(r"^(paper|concept|claim|evidence):[a-z0-9][a-z0-9-]*:\d+$")
+ID_RE = re.compile(r"^(paper|concept|claim|evidence):.+:.+$")
 DOI_RE = re.compile(r"^10\.\d{4,9}/[-._;()/:A-Z0-9]+$", re.IGNORECASE)
 EXCEPTION_NOTE_RE = re.compile(
     r"\b(exception|unsupported|no evidence|no related evidence|manual review|not source-backed)\b",
@@ -151,7 +151,7 @@ def validate_items(
         if obj_id and not ID_RE.match(obj_id):
             errors.append(
                 f"[{source_name}:{idx}] id does not match deterministic policy "
-                f"(<type>:<slug>:<index>) for {label}: {obj_id}"
+                f"(<type>:<article-id>:<stable-key>) for {label}: {obj_id}"
             )
 
         relation_list = obj.get("relation_edges")
