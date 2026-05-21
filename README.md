@@ -46,6 +46,13 @@ Anthropic API key because ARS runs as Claude Code plugin/skill commands.
 
 The preferred workflow uses native structured ARS KG handoff files for the best graph quality. The KG-layer exporter remains available as a fallback when a run only produced Markdown artifacts.
 
+In the normal current flow:
+
+1. Install and run ARS from `Neuronautix/academic-research-skills`.
+2. ARS produces the article plus a native `*.kg_candidates.json` handoff.
+3. This repository validates that handoff and publishes the KG/wiki outputs.
+4. The fallback exporter is only needed when ARS produced Markdown but no native KG handoff.
+
 ### Step 1 — Get the code
 
 If you use Claude Code from WSL Ubuntu, clone the repo inside the WSL filesystem
@@ -67,6 +74,13 @@ git submodule update --init --recursive
 
 ### Step 2 — Start ARS in Claude Code
 
+Install the ARS plugin from the Neuronautix fork:
+
+```text
+/plugin marketplace add Neuronautix/academic-research-skills
+/plugin install academic-research-skills
+```
+
 Start Claude Code from the repo root:
 
 ```bash
@@ -77,35 +91,54 @@ If ARS is installed as the Claude Code plugin, start the full ARS workflow insid
 Claude with:
 
 ```text
-/academic-research-skills:ars-full
+/ars-full
 ```
 
-For a first test, ask for a short Markdown article and a claim verification
-report:
+For a first test, ask for a short article with KG artifacts:
 
 ```text
 Create a short complete research article about AI tutors and student learning outcomes.
-Keep the scope small for a test run. Output the final article as Markdown, and also
-produce a Claim Verification Report if available.
+Keep the scope small for a test run. Output the final article as Markdown, produce
+the native {article_id}.kg_candidates.json handoff, and produce the Claim
+Verification Report JSON/Markdown if available.
 ```
 
-Save the final article as a Markdown file, for example:
+Save or move the native KG handoff into the KG input directory:
+
+```text
+kg_layer/data/ars_handoff/ai-tutors-test.kg_candidates.json
+```
+
+Keep the article and claim verification files with the run artifacts. If ARS did
+not emit a native handoff, save the final article and claim verification report
+for fallback export, for example:
 
 ```text
 kg_layer/data/raw/ai_tutors_article.md
-```
-
-If Claude produced a Claim Verification Report, save it too, for example:
-
-```text
 kg_layer/data/raw/ai_tutors_claim_verification_report.md
 ```
 
-### Step 3 — Produce ARS KG handoff files
+### Step 3 — Use or produce ARS KG handoff files
 
 Native ARS KG handoff is the preferred source. When the ARS runtime writes
 `*.kg_candidates.json` files, place those files in `kg_layer/data/ars_handoff/`
 and skip directly to validation or publishing.
+
+Validate the native handoff:
+
+```bash
+python3 kg_layer/pipeline/run_pipeline.py \
+  --structured-input-dir kg_layer/data/ars_handoff \
+  --validate-only
+```
+
+Run stricter semantic checks:
+
+```bash
+python3 kg_layer/pipeline/run_pipeline.py \
+  --structured-input-dir kg_layer/data/ars_handoff \
+  --semantic-validate-only
+```
 
 If the ARS run only produced Markdown, use the KG-layer fallback exporter to
 derive a compatible handoff file from the final article and, when available, the
@@ -118,7 +151,8 @@ python3 kg_layer/ars_export/export_kg_candidates.py \
   --output-dir kg_layer/data/ars_handoff \
   --article-id ai-tutors-test \
   --run-id ars-test-001 \
-  --reviewer "Your Name"
+  --reviewer "Your Name" \
+  --handoff-schema ars_v1
 ```
 
 The fallback exporter writes one `*.kg_candidates.json` file into the output
@@ -126,22 +160,8 @@ directory. If you only have the final article, omit
 `--claim-verification-report`; the exporter uses markdown extraction and stamps
 the extracted items with `--fallback-status` (default: `accepted`).
 
-To check native or exporter-generated handoff files before publishing:
-
-```bash
-python3 kg_layer/pipeline/run_pipeline.py \
-  --structured-input-dir kg_layer/data/ars_handoff \
-  --validate-only
-```
-
-For ontology-quality checks, use semantic validation. This is stricter than JSON
-shape validation and requires accepted claims to link to supporting evidence:
-
-```bash
-python3 kg_layer/pipeline/run_pipeline.py \
-  --structured-input-dir kg_layer/data/ars_handoff \
-  --semantic-validate-only
-```
+After fallback export, use the same validation and semantic validation commands
+shown above.
 
 See [`kg_layer/data/examples/example_article.kg_candidates.json`](kg_layer/data/examples/example_article.kg_candidates.json)
 for the exact file format, and [`kg_layer/schemas/ars_handoff_schema.json`](kg_layer/schemas/ars_handoff_schema.json)
