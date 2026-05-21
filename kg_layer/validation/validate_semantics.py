@@ -1,10 +1,27 @@
 import argparse
 import json
 import re
+import sys
 from pathlib import Path
 from typing import Dict, Iterable, List, Set, Tuple
 
-ALLOWED_REVIEW_STATUS = {"pending", "in_review", "accepted", "rejected", "needs_revision"}
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from kg_layer.extraction.ars_handoff_adapter import adapt_handoff
+
+ALLOWED_REVIEW_STATUS = {
+    "pending",
+    "in_review",
+    "accepted",
+    "rejected",
+    "needs_revision",
+    "candidate",
+    "evidence_supported",
+    "human_reviewed",
+    "superseded",
+}
 RECOMMENDED_HANDOFF_SUFFIX = ".kg_candidates.json"
 HTTP_IRI_RE = re.compile(r"^https?://[^\s<>{}|\\^`\[\]\"]+$")
 ID_RE = re.compile(r"^(paper|concept|claim|evidence):.+:.+$")
@@ -13,7 +30,26 @@ EXCEPTION_NOTE_RE = re.compile(
     r"\b(exception|unsupported|no evidence|no related evidence|manual review|not source-backed)\b",
     re.IGNORECASE,
 )
-ALLOWED_RELATION_TYPES = {"supports", "contradicts", "relates_to_concept", "derived_from", "cites", "same_as"}
+ALLOWED_RELATION_TYPES = {
+    "supports",
+    "contradicts",
+    "relates_to_concept",
+    "derived_from",
+    "cites",
+    "same_as",
+    "uses_system",
+    "measures_endpoint",
+    "reports_finding",
+    "has_species",
+    "has_strain",
+    "uses_assay",
+    "requires_metadata",
+    "compares_condition",
+    "supports_claim",
+    "contradicts_claim",
+    "has_limitation",
+    "derived_from_source",
+}
 
 
 def object_label(obj: Dict, fallback: str) -> str:
@@ -39,7 +75,7 @@ def load_items(path: Path) -> Tuple[List[Dict], List[str]]:
     if isinstance(data, list):
         items = data
     elif isinstance(data, dict) and isinstance(data.get("items"), list):
-        items = data["items"]
+        items = adapt_handoff(data)["items"]
     else:
         raise ValueError("top-level JSON must be an item array or a handoff object with an items array")
 

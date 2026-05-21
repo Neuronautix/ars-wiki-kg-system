@@ -22,6 +22,17 @@ VERDICT_TO_STATUS = {
 SCHEMA_VERSION = "1.1.0"
 CONTRACT_VERSION = "1.1"
 ARS_V1_SCHEMA_VERSION = "1.0.0"
+CLAIM_MODALITY_TO_ARS = {
+    "measured": "measured",
+    "observed": "observed",
+    "reported": "reported",
+    "inferred": "inferred",
+    "hypothesized": "hypothesized",
+    "hypothetical": "hypothesized",
+    "speculative": "speculative",
+    "asserted": "reported",
+    "negated": "reported",
+}
 
 
 def slugify(value: str) -> str:
@@ -90,6 +101,12 @@ def evidence_id_for_claim(claim_id: str, article_id: str, idx: int) -> str:
     if claim_id.startswith("claim:"):
         return f"evidence:{claim_id[len('claim:'):]}"
     return f"evidence:{article_id}:{idx}"
+
+
+def ars_claim_modality(item: Dict) -> str:
+    modality = str(item.get("modality") or item.get("claim_modality") or "reported")
+    key = modality.strip().lower().replace("-", "_").replace(" ", "_")
+    return CLAIM_MODALITY_TO_ARS.get(key, "reported")
 
 
 def is_claim_verification_json(path: Path) -> bool:
@@ -413,6 +430,8 @@ def ars_v1_item(item: Dict, reviewer: str, reviewed_at: str) -> Dict:
     if item["type"] == "Claim":
         result["related_evidence_ids"] = item.get("related_evidence_ids") or []
         result["related_concept_ids"] = item.get("related_concept_ids") or []
+        result["claim_type"] = item.get("claim_type") or "finding"
+        result["modality"] = ars_claim_modality(item)
     return result
 
 

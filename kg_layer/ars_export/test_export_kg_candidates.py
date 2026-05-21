@@ -201,6 +201,8 @@ class TestExportKgCandidates(unittest.TestCase):
             self.assertEqual(claim["source_citation_id"], "S02")
             self.assertEqual(claim["confidence_rationale"], "Source and manuscript numbers align.")
             self.assertEqual(claim["review_decision"]["rationale"], "Verified.")
+            self.assertEqual(claim["claim_type"], "finding")
+            self.assertEqual(claim["modality"], "reported")
 
             validation = subprocess.run(
                 [sys.executable, str(ARS_V1_VALIDATOR), str(output)],

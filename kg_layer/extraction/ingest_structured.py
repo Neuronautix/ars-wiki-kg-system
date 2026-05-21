@@ -22,8 +22,37 @@ REQUIRED_ITEM_FIELDS = [
     "review_status",
 ]
 ALLOWED_TYPES = {"Paper", "Concept", "Claim", "Evidence"}
-ALLOWED_REVIEW_STATUS = {"pending", "in_review", "accepted", "rejected", "needs_revision"}
-ALLOWED_RELATION_TYPES = {"supports", "contradicts", "relates_to_concept", "derived_from", "cites", "same_as"}
+ALLOWED_REVIEW_STATUS = {
+    "pending",
+    "in_review",
+    "accepted",
+    "rejected",
+    "needs_revision",
+    "candidate",
+    "evidence_supported",
+    "human_reviewed",
+    "superseded",
+}
+ALLOWED_RELATION_TYPES = {
+    "supports",
+    "contradicts",
+    "relates_to_concept",
+    "derived_from",
+    "cites",
+    "same_as",
+    "uses_system",
+    "measures_endpoint",
+    "reports_finding",
+    "has_species",
+    "has_strain",
+    "uses_assay",
+    "requires_metadata",
+    "compares_condition",
+    "supports_claim",
+    "contradicts_claim",
+    "has_limitation",
+    "derived_from_source",
+}
 ID_RE = re.compile(r"^(paper|concept|claim|evidence):.+:.+$")
 DOI_RE = re.compile(r"^10\.\d{4,9}/[-._;()/:A-Z0-9]+$", re.IGNORECASE)
 URL_RE = re.compile(r"^https?://[^\s<>{}|\\^`\[\]\"]+$")

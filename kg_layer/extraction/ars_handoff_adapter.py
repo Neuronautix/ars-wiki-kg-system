@@ -7,11 +7,50 @@ ARS_SCHEMA_VERSION = "1.0.0"
 KG_SCHEMA_VERSION = "1.1.0"
 SUPPORTED_SCHEMA_VERSIONS = {ARS_SCHEMA_VERSION, KG_SCHEMA_VERSION}
 
+REVIEW_STATUS_MAP = {
+    "PENDING": "pending",
+    "IN_REVIEW": "in_review",
+    "UNDER_REVIEW": "in_review",
+    "ACCEPTED": "accepted",
+    "VERIFIED": "accepted",
+    "REJECTED": "rejected",
+    "UNVERIFIABLE": "rejected",
+    "NEEDS_REVISION": "needs_revision",
+    "MINOR_DISTORTION": "needs_revision",
+    "MAJOR_DISTORTION": "rejected",
+    "UNVERIFIABLE_ACCESS": "in_review",
+    "CANDIDATE": "candidate",
+    "EVIDENCE_SUPPORTED": "evidence_supported",
+    "HUMAN_REVIEWED": "human_reviewed",
+    "SUPERSEDED": "superseded",
+}
+
 ARS_LINK_RELATION_MAP = {
     "claim_supported_by_evidence": "supports",
     "claim_contradicted_by_evidence": "contradicts",
     "claim_about_concept": "relates_to_concept",
     "evidence_about_concept": "relates_to_concept",
+    "evidence_supports_claim": "supports",
+    "evidence_contradicts_claim": "contradicts",
+    "supports": "supports",
+    "contradicts": "contradicts",
+    "relates_to_concept": "relates_to_concept",
+    "related_to_concept": "relates_to_concept",
+    "derived_from": "derived_from",
+    "derived_from_source": "derived_from_source",
+    "cites": "cites",
+    "same_as": "same_as",
+    "uses_system": "uses_system",
+    "measures_endpoint": "measures_endpoint",
+    "reports_finding": "reports_finding",
+    "has_species": "has_species",
+    "has_strain": "has_strain",
+    "uses_assay": "uses_assay",
+    "requires_metadata": "requires_metadata",
+    "compares_condition": "compares_condition",
+    "supports_claim": "supports_claim",
+    "contradicts_claim": "contradicts_claim",
+    "has_limitation": "has_limitation",
 }
 
 
@@ -19,9 +58,38 @@ def is_ars_handoff(data: Dict) -> bool:
     return str(data.get("schema_version")) == ARS_SCHEMA_VERSION
 
 
+def normalize_review_status(value: object) -> object:
+    """Normalize ARS verdict/status aliases into KG lifecycle statuses."""
+    if not isinstance(value, str):
+        return value
+    status = value.strip()
+    status_key = status.upper().replace("-", "_").replace(" ", "_")
+    return REVIEW_STATUS_MAP.get(status_key, status)
+
+
+def normalize_relation_type(value: object) -> object:
+    """Normalize ARS link relation aliases into KG relation types."""
+    if not isinstance(value, str):
+        return value
+    relation_type = value.strip()
+    relation_key = relation_type.lower().replace("-", "_").replace(" ", "_")
+    return ARS_LINK_RELATION_MAP.get(relation_key, relation_type)
+
+
+def normalize_relation_edges(item: Dict) -> None:
+    relation_edges = item.get("relation_edges")
+    if not isinstance(relation_edges, list):
+        return
+    for edge in relation_edges:
+        if isinstance(edge, dict) and "relation_type" in edge:
+            edge["relation_type"] = normalize_relation_type(edge["relation_type"])
+
+
 def adapt_review_decision(item: Dict) -> Dict:
     """Map ARS review_decision into KG reviewer fields while preserving source fields."""
     out = dict(item)
+    if "review_status" in out:
+        out["review_status"] = normalize_review_status(out["review_status"])
     review_decision = out.get("review_decision")
     if isinstance(review_decision, dict):
         if "reviewer" not in out and review_decision.get("decision_by") is not None:
@@ -30,6 +98,11 @@ def adapt_review_decision(item: Dict) -> Dict:
             out["reviewed_at"] = review_decision["decision_at"]
         if "reviewer_notes" not in out and review_decision.get("rationale") is not None:
             out["reviewer_notes"] = review_decision["rationale"]
+        for status_field in ("review_status", "new_status", "status", "verdict"):
+            if "review_status" not in out and review_decision.get(status_field) is not None:
+                out["review_status"] = normalize_review_status(review_decision[status_field])
+                break
+    normalize_relation_edges(out)
     return out
 
 
@@ -88,7 +161,8 @@ def link_to_relation_edge(link: object) -> Optional[Tuple[str, Dict]]:
 
     from_id = str(link.get("from_id", "")).strip()
     to_id = str(link.get("to_id", "")).strip()
-    relation_type = ARS_LINK_RELATION_MAP.get(str(link.get("relation_type", "")).strip())
+    relation_key = str(link.get("relation_type", "")).strip().lower().replace("-", "_").replace(" ", "_")
+    relation_type = ARS_LINK_RELATION_MAP.get(relation_key)
     if not from_id or not to_id or relation_type is None:
         return None
 
@@ -113,8 +187,12 @@ def reverse_link_to_relation_edge(link: object) -> Optional[Tuple[str, Dict]]:
     if not isinstance(link, dict):
         return None
 
-    relation_type = str(link.get("relation_type", "")).strip()
-    if relation_type != "claim_supported_by_evidence":
+    relation_type = str(link.get("relation_type", "")).strip().lower().replace("-", "_").replace(" ", "_")
+    reverse_relation_type = {
+        "claim_supported_by_evidence": "supports",
+        "claim_contradicted_by_evidence": "contradicts",
+    }.get(relation_type)
+    if reverse_relation_type is None:
         return None
 
     from_id = str(link.get("from_id", "")).strip()
@@ -124,7 +202,7 @@ def reverse_link_to_relation_edge(link: object) -> Optional[Tuple[str, Dict]]:
 
     edge: Dict = {
         "target_id": from_id,
-        "relation_type": "supports",
+        "relation_type": reverse_relation_type,
     }
     if link.get("confidence") is not None:
         edge["confidence"] = link["confidence"]

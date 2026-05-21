@@ -28,19 +28,22 @@ Article-level metadata (optional, propagated from ARS HITL handoff):
 - article_id
 - run_id
 
-## Preferred workflow: ARS HITL → KG
+## Preferred workflow: native ARS KG handoff → KG
 
 The ideal flow produces both an ARS article and its corresponding KG from the same
 reviewed material.
 
 ### 1. ARS run
 
-ARS synthesizes an article and, during the HITL loop, generates structured KG candidates
-(claims, concepts, evidence) that reviewers accept or refine.
+ARS synthesizes an article and, during the HITL loop, can generate native structured
+KG candidates (claims, concepts, evidence) that reviewers accept or refine. Native
+ARS output should be written as one `*.kg_candidates.json` handoff file per article.
 
-### 2. Export ARS HITL outputs
+### 2. Use native handoff, or export a fallback handoff
 
-Export the reviewed suggestions as one `*.kg_candidates.json` handoff file per article:
+If the ARS runtime emitted `*.kg_candidates.json` files, pass their directory to
+the KG pipeline directly. If a run only produced Markdown, use the KG-layer
+fallback exporter to derive a compatible handoff file:
 
 ```bash
 python3 kg_layer/ars_export/export_kg_candidates.py \
@@ -52,8 +55,8 @@ python3 kg_layer/ars_export/export_kg_candidates.py \
   --reviewer alice
 ```
 
-When `--claim-verification-report` is provided, verdicts from the ARS Claim
-Verification Report are mapped into KG review statuses:
+When `--claim-verification-report` is provided to the fallback exporter, verdicts
+from the ARS Claim Verification Report are mapped into KG review statuses:
 
 | ARS verdict | KG review_status |
 |---|---|
@@ -63,11 +66,11 @@ Verification Report are mapped into KG review statuses:
 | `UNVERIFIABLE` | `rejected` |
 | `UNVERIFIABLE_ACCESS` | `in_review` |
 
-If the report is unavailable, omit `--claim-verification-report`; the exporter
-uses article markdown extraction and assigns `--fallback-status` to extracted
-items (default: `accepted`).
+If the report is unavailable, omit `--claim-verification-report`; the fallback
+exporter uses article markdown extraction and assigns `--fallback-status` to
+extracted items (default: `accepted`).
 
-Validate handoff files before publishing:
+Validate native or exporter-generated handoff files before publishing:
 
 ```bash
 python3 kg_layer/pipeline/run_pipeline.py \
@@ -94,8 +97,8 @@ python kg_layer/pipeline/run_pipeline.py \
   --structured-input-dir /path/to/ars/hitl/outputs
 ```
 
-This ingests the structured handoff files, validates them, preserves the HITL review
-metadata (reviewer, reviewed_at, review_status), and publishes:
+This ingests the structured handoff files, validates them, preserves the HITL
+review metadata (reviewer, reviewed_at, review_status), and publishes:
 
 - **Per-article outputs** in `kg_layer/data/published/per_article/`:
   - `{article-slug}.kg.json` — flat KG objects for that article
@@ -119,7 +122,8 @@ retrieval, gap analysis, and hypothesis generation.
 
 ## Fallback: markdown-only workflow
 
-Place ARS markdown artifacts in `kg_layer/data/raw/` and run:
+When no native handoff or exported handoff is available, place ARS markdown
+artifacts in `kg_layer/data/raw/` and run:
 
 ```bash
 python kg_layer/pipeline/run_pipeline.py
@@ -135,9 +139,9 @@ When `--structured-input-dir` points to a valid directory but no
 `*.kg_candidates.json` files are found, the pipeline automatically falls back to
 markdown extraction. Missing or non-directory paths fail fast.
 
-## Merging both sources
+## Merging native/exported handoff and markdown sources
 
-To combine ARS HITL structured artifacts with markdown extraction:
+To combine ARS structured handoff artifacts with markdown extraction:
 
 ```bash
 python kg_layer/pipeline/run_pipeline.py \
@@ -148,7 +152,7 @@ python kg_layer/pipeline/run_pipeline.py \
 
 Structured items are preferred on id collision.
 
-## ARS HITL handoff format
+## ARS KG handoff format
 
 Each `*.kg_candidates.json` file covers one article:
 

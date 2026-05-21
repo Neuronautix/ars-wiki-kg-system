@@ -6,7 +6,7 @@
 
 ## What is this?
 
-This system works **alongside the ARS CLI** to automatically turn reviewed research outputs into a structured knowledge graph and browsable wiki.
+This system works **alongside the ARS CLI/plugin** to turn reviewed research outputs into a structured knowledge graph and browsable wiki.
 
 When ARS finishes a research run you get **two paired deliverables**:
 
@@ -44,7 +44,7 @@ Anthropic API key because ARS runs as Claude Code plugin/skill commands.
 
 ## Recommended: ARS + KG together
 
-The preferred workflow uses structured ARS HITL outputs for the best graph quality.
+The preferred workflow uses native structured ARS KG handoff files for the best graph quality. The KG-layer exporter remains available as a fallback when a run only produced Markdown artifacts.
 
 ### Step 1 — Get the code
 
@@ -101,10 +101,15 @@ If Claude produced a Claim Verification Report, save it too, for example:
 kg_layer/data/raw/ai_tutors_claim_verification_report.md
 ```
 
-### Step 3 — Produce ARS HITL handoff files
+### Step 3 — Produce ARS KG handoff files
 
-After a research run, export structured KG candidates from the final ARS article
-and, when available, the ARS Claim Verification Report:
+Native ARS KG handoff is the preferred source. When the ARS runtime writes
+`*.kg_candidates.json` files, place those files in `kg_layer/data/ars_handoff/`
+and skip directly to validation or publishing.
+
+If the ARS run only produced Markdown, use the KG-layer fallback exporter to
+derive a compatible handoff file from the final article and, when available, the
+ARS Claim Verification Report:
 
 ```bash
 python3 kg_layer/ars_export/export_kg_candidates.py \
@@ -116,12 +121,12 @@ python3 kg_layer/ars_export/export_kg_candidates.py \
   --reviewer "Your Name"
 ```
 
-The exporter writes one `*.kg_candidates.json` file into the output directory.
-If you only have the final article, omit `--claim-verification-report`; the
-exporter falls back to markdown extraction and stamps the extracted items with
-`--fallback-status` (default: `accepted`).
+The fallback exporter writes one `*.kg_candidates.json` file into the output
+directory. If you only have the final article, omit
+`--claim-verification-report`; the exporter uses markdown extraction and stamps
+the extracted items with `--fallback-status` (default: `accepted`).
 
-To check ARS-emitted handoff files before publishing:
+To check native or exporter-generated handoff files before publishing:
 
 ```bash
 python3 kg_layer/pipeline/run_pipeline.py \
@@ -204,21 +209,23 @@ slug, a short hash suffix is appended to keep filenames distinct.
 
 ---
 
-## Live sidecar: ARS markdown + automatic KG refresh
+## Live sidecar: ARS handoff/markdown + automatic KG refresh
 
-If ARS continuously writes or updates markdown files to a folder, run the KG layer
-in **watch mode** alongside it:
+If ARS continuously writes or updates native handoff files, point
+`--structured-input-dir` at that folder and run the KG layer in **watch mode**
+alongside it. If ARS only writes Markdown, use `--input-dir` instead:
 
 ```bash
 python kg_layer/pipeline/run_pipeline.py \
-  --input-dir /absolute/path/to/ars/articles \
+  --structured-input-dir /absolute/path/to/ars/handoff \
   --watch \
   --poll-seconds 5
 ```
 
-The KG layer automatically re-runs whenever ARS adds or updates markdown files.
-You can also combine watch mode with `--structured-input-dir` to pick up both
-structured handoff files and markdown articles as they appear.
+The KG layer automatically re-runs whenever ARS adds or updates structured
+handoff files, markdown files, or review decisions. You can combine watch mode
+with `--structured-input-dir` and `--input-dir` to pick up both native handoff
+files and fallback markdown articles as they appear.
 
 ---
 
@@ -340,7 +347,7 @@ ars-wiki-kg-system/
 │   ├── wiki/                  Wiki page renderer
 │   └── schemas/               Data model (LinkML + ARS handoff JSON Schema)
 └── vendor/
-    └── academic-research-skills/   Upstream ARS reference (pinned submodule)
+    └── academic-research-skills/   ARS runtime reference (pinned submodule)
 ```
 
 ---
@@ -348,7 +355,7 @@ ars-wiki-kg-system/
 ## How the Pipeline Works
 
 ```
-ARS HITL outputs                    Markdown articles
+Native ARS KG handoff               Markdown articles
 (*.kg_candidates.json)              (*.md / *.markdown)
         │                                   │
         ▼                                   ▼
@@ -392,14 +399,16 @@ This turns each completed article into a **lasting research asset**, not just a 
 
 ---
 
-## Keeping the Upstream Reference Up to Date
+## Keeping the ARS Runtime Reference Up to Date
 
-The `vendor/academic-research-skills` folder is a pinned snapshot of the upstream ARS project. To update it:
+The `vendor/academic-research-skills` folder is a pinned snapshot of the ARS
+runtime repository at `Neuronautix/academic-research-skills`. To update it:
 
 ```bash
 git submodule update --init --recursive
-git -C vendor/academic-research-skills fetch --tags
-git -C vendor/academic-research-skills checkout v3.7.0
+git -C vendor/academic-research-skills fetch neuronautix main --tags
+git -C vendor/academic-research-skills switch main
+git -C vendor/academic-research-skills reset --hard neuronautix/main
 ```
 
 ## Working With Feature Branches and the ARS Submodule
@@ -422,19 +431,19 @@ Recommended order:
 # 1. Commit and push ARS changes inside the submodule
 cd vendor/academic-research-skills
 git switch -c feature/ars-kg-semantic-protocol
-git add academic-pipeline academic-paper/agents
+git add README.md docs/SETUP.md .claude-plugin/plugin.json
 git commit -m "Add ARS KG handoff protocol"
 git push -u origin feature/ars-kg-semantic-protocol
 
 # 2. Commit and push the parent KG system branch
 cd ../..
 git switch -c feature/ars-kg-semantic-ontology
-git add kg_layer README.md vendor/academic-research-skills
+git add README.md kg_layer/README.md vendor/academic-research-skills
 git commit -m "Add semantic ARS KG pipeline integration"
 git push -u origin feature/ars-kg-semantic-ontology
 ```
 
-If you cannot push to the upstream ARS repository, push the ARS submodule branch
+If you cannot push to `Neuronautix/academic-research-skills`, push the ARS submodule branch
 to your own fork first, then update the submodule remote or pointer accordingly.
 Do not push the parent branch with a submodule commit that exists only locally;
 other machines will not be able to check it out.

@@ -35,6 +35,18 @@ ARS_ALLOWED_LINK_RELATION_TYPES = {
     "claim_contradicted_by_evidence",
     "claim_about_concept",
     "evidence_about_concept",
+    "uses_system",
+    "measures_endpoint",
+    "reports_finding",
+    "has_species",
+    "has_strain",
+    "uses_assay",
+    "requires_metadata",
+    "compares_condition",
+    "supports_claim",
+    "contradicts_claim",
+    "has_limitation",
+    "derived_from_source",
 }
 ARS_ALLOWED_LINK_POLARITIES = {"support", "contradiction", "neutral"}
 
